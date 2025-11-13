@@ -16,7 +16,7 @@
             },
             "embedding": {
                 "model": "text-embedding-3-small",
-                "vector": [0.1, 0.5, ...]
+                "vector": [0.1, 0.5, 0.3, 0.7]
             },
             "last_updated": "2024-03-15T12:34:56Z"
         }
