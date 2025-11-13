@@ -1,0 +1,15 @@
+# Dependencies for the RAG pipeline
+
+# Vector Database
+qdrant-client
+
+# Retrieval Layer (API)
+fastapi
+uvicorn
+
+# Configuration
+python-dotenv
+pydantic
+
+# Testing
+pytest
