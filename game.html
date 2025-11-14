@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpine.js Tic-Tac-Toe</title>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div x-data="game()" class="container mx-auto px-4">
+        <div class="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-2xl font-bold text-center mb-4">Tic-Tac-Toe</h1>
+            
+            <div class="text-center mb-4">
+                <template x-if="!winner && !isTie">
+                    <p class="text-lg">Current Player: <span x-text="currentPlayer"></span></p>
+                </template>
+                <template x-if="winner">
+                    <p class="text-lg font-bold text-green-600">Player <span x-text="winner"></span> wins!</p>
+                </template>
+                <template x-if="isTie">
+                    <p class="text-lg font-bold text-gray-600">It's a tie!</p>
+                </template>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <template x-for="(cell, index) in board" :key="index">
+                    <button 
+                        @click="makeMove(index)"
+                        class="h-16 text-2xl font-bold border-2 border-gray-300 rounded-lg"
+                        :class="{
+                            'bg-blue-100': cell === 'X',
+                            'bg-red-100': cell === 'O',
+                            'hover:bg-gray-100': !cell && !winner && !isTie
+                        }"
+                        :disabled="cell || winner || isTie"
+                        x-text="cell"
+                    ></button>
+                </template>
+            </div>
+
+            <button 
+                @click="resetGame()"
+                class="w-full py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+                Reset Game
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function game() {
+            return {
+                board: Array(9).fill(''),
+                currentPlayer: 'X',
+                winner: null,
+                isTie: false,
+                
+                winningCombos: [
+                    [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+                    [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+                    [0, 4, 8], [2, 4, 6] // Diagonals
+                ],
+
+                makeMove(index) {
+                    if (this.board[index] || this.winner || this.isTie) return;
+                    
+                    this.board[index] = this.currentPlayer;
+                    
+                    if (this.checkWin()) {
+                        this.winner = this.currentPlayer;
+                        return;
+                    }
+                    
+                    if (this.board.every(cell => cell)) {
+                        this.isTie = true;
+                        return;
+                    }
+                    
+                    this.currentPlayer = this.currentPlayer === 'X' ? 'O' : 'X';
+                },
+
+                checkWin() {
+                    return this.winningCombos.some(combo => 
+                        combo.every(index => 
+                            this.board[index] === this.currentPlayer
+                        )
+                    );
+                },
+
+                resetGame() {
+                    this.board = Array(9).fill('');
+                    this.currentPlayer = 'X';
+                    this.winner = null;
+                    this.isTie = false;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
