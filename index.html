@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic-Tac-Toe</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+            background-color: #f5f5f5;
+        }
+        .game-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 30px auto;
+            width: 300px;
+            height: 300px;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: #f0f0f0;
+            border: 2px solid #333;
+            border-radius: 10px;
+            font-size: 48px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s ease;
+        }
+        .cell:hover {
+            background-color: #e0e0e0;
+        }
+        .status {
+            font-size: 24px;
+            margin: 20px 0;
+            color: #333;
+        }
+        .restart {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 20px;
+        }
+        .restart:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Tic-Tac-Toe</h1>
+        <div class="status" id="status">Player X's turn</div>
+        <div class="board" id="board"></div>
+        <button class="restart" id="restart">Restart Game</button>
+    </div>
+
+    <script>
+        // Game state
+        let currentPlayer = 'X';
+        let gameBoard = ['', '', '', '', '', '', '', '', ''];
+        let gameActive = true;
+
+        // Winning combinations
+        const winningCombos = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+            [0, 4, 8], [2, 4, 6]             // diagonals
+        ];
+
+        // DOM elements
+        const board = document.getElementById('board');
+        const status = document.getElementById('status');
+        const restartButton = document.getElementById('restart');
+
+        // Initialize the game
+        function initGame() {
+            gameBoard = ['', '', '', '', '', '', '', '', ''];
+            gameActive = true;
+            currentPlayer = 'X';
+            status.textContent = 'Player X\'s turn';
+            renderBoard();
+        }
+
+        // Render the board
+        function renderBoard() {
+            board.innerHTML = '';
+            gameBoard.forEach((cell, index) => {
+                const cellElement = document.createElement('div');
+                cellElement.className = 'cell';
+                cellElement.dataset.index = index;
+                cellElement.textContent = cell;
+                cellElement.addEventListener('click', handleCellClick);
+                board.appendChild(cellElement);
+            });
+        }
+
+        // Handle cell click
+        function handleCellClick(event) {
+            const clickedCell = event.target;
+            const clickedIndex = parseInt(clickedCell.dataset.index);
+
+            // Check if cell is already filled or game is over
+            if (gameBoard[clickedIndex] !== '' || !gameActive) {
+                return;
+            }
+
+            // Update game board and current player
+            gameBoard[clickedIndex] = currentPlayer;
+            clickedCell.textContent = currentPlayer;
+
+            // Check for win or draw
+            if (checkWin(currentPlayer)) {
+                status.textContent = `Player ${currentPlayer} wins!`;
+                gameActive = false;
+                return;
+            }
+
+            if (checkDraw()) {
+                status.textContent = 'Game ended in a draw!';
+                gameActive = false;
+                return;
+            }
+
+            // Switch to bot's turn
+            currentPlayer = 'O';
+            status.textContent = 'Bot\'s turn';
+            setTimeout(botMove, 500); // Add a small delay for bot move
+        }
+
+        // Bot AI move
+        function botMove() {
+            if (!gameActive) return;
+
+            // Find an empty cell
+            const emptyCells = gameBoard.map((cell, index) => cell === '' ? index : null).filter(index => index !== null);
+
+            // If no empty cells, it's a draw
+            if (emptyCells.length === 0) {
+                return;
+            }
+
+            // Simple AI: choose a random empty cell
+            const randomIndex = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            gameBoard[randomIndex] = 'O';
+
+            // Update the board display
+            const cellElement = document.querySelector(`.cell[data-index="${randomIndex}"]`);
+            cellElement.textContent = 'O';
+
+            // Check for win or draw
+            if (checkWin('O')) {
+                status.textContent = 'Bot wins!';
+                gameActive = false;
+                return;
+            }
+
+            if (checkDraw()) {
+                status.textContent = 'Game ended in a draw!';
+                gameActive = false;
+                return;
+            }
+
+            // Switch back to player's turn
+            currentPlayer = 'X';
+            status.textContent = 'Player X\'s turn';
+        }
+
+        // Check if current player has won
+        function checkWin(player) {
+            return winningCombos.some(combo => {
+                return combo.every(index => gameBoard[index] === player);
+            });
+        }
+
+        // Check if game is a draw
+        function checkDraw() {
+            return gameBoard.every(cell => cell !== '');
+        }
+
+        // Restart game
+        function restartGame() {
+            initGame();
+        }
+
+        // Event listeners
+        restartButton.addEventListener('click', restartGame);
+
+        // Initialize game on load
+        initGame();
+    </script>
+</body>
+</html>
+

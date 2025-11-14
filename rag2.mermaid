@@ -1,0 +1,81 @@
+graph TB
+    subgraph "Code Repository"
+        A[Source Code Files]
+        B[Documentation]
+        C[README/Config Files]
+    end
+
+    subgraph "Preprocessing Layer"
+        D[Code Parser & Chunker]
+        E[AST Analyzer]
+        F[Metadata Extractor]
+        G[Dependency Mapper]
+    end
+
+    subgraph "Embedding Layer"
+        H[EmbeddingGamma Model<br/>Docker Container]
+        I[Batch Processor]
+        J[Embedding Quality Validator]
+    end
+
+    subgraph "Vector Database"
+        K[Qdrant<br/>Docker Container]
+        L[Collections:<br/>- Functions<br/>- Classes<br/>- Documentation]
+        M[Payload Storage:<br/>- Code snippets<br/>- File paths<br/>- Metadata]
+    end
+
+    subgraph "Initial Retrieval Layer"
+        N[Query Processor]
+        O[Hybrid Search:<br/>- Vector similarity<br/>- Keyword search<br/>- Metadata filters]
+        P[Initial Candidate Selection<br/>Top-K results]
+    end
+
+    subgraph "Reranking Layer"
+        Q[Reranking Input Processor<br/>Context + Candidates]
+        R[Cross-Encoder Model<br/>Sentence Transformers]
+        S[Relevance Scoring<br/>Query-Document pairs]
+        T[Semantic Similarity<br/>Re-embedding]
+        U[Final Ranking Algorithm<br/>Weighted score fusion]
+        V[Quality Assurance Filter<br/>Threshold validation]
+    end
+
+    subgraph "Generation Layer"
+        W[Mistral Code Model]
+        X[Context Builder]
+        Y[Prompt Constructor]
+    end
+
+    A --> D
+    B --> D
+    C --> D
+    D --> E
+    D --> F
+    E --> G
+    F --> I
+    G --> I
+    I --> H
+    H --> J
+    J --> K
+    K --> L
+    K --> M
+
+    N --> O
+    O --> L
+    O --> M
+    O --> P
+    P --> Q
+    Q --> R
+    Q --> T
+    R --> S
+    T --> S
+    S --> U
+    U --> V
+    V --> X
+    X --> Y
+    Y --> W
+
+    style H fill:#e1f5ff
+    style K fill:#e1f5ff
+    style R fill:#fff2cc
+    style U fill:#fff2cc
+    style W fill:#ffe1e1
