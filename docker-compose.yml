@@ -31,5 +31,7 @@ services:
 
 models:
   infer:
-    model: hf.co/qwen/qwen2.5-coder-3b-instruct-gguf:q4_k_m
+    model: ai/granite-4.0-h-micro
     context_size: 32768
+    runtime_flags:
+      - ""
