@@ -1,0 +1,210 @@
+RAG Indexing Pipeline Specification
+====================================
+
+This document outlines the code structure and implementation for a RAG (Retrieval-Augmented Generation) indexing pipeline. The pipeline processes code repositories using Tree-Sitter for parsing, LangChain for orchestration, Qdrant for vector storage, and local LLMs for generation/evaluation. The pipeline focuses on the indexing phase of RAG, preparing data for later retrieval and generation.
+
+Components are organized in the following directory structure:
+
+main.py
+-------
+- Main entry point with Click CLI interface
+- Commands: ingest (for indexing) and api (for retrieval/generation)
+- Orchestrates the full pipeline from ingestion to query
+- Handles configuration loading and logging
+
+config/settings.py
+-------------------
+- Pydantic BaseSettings class for configuration
+- Loads from .env files and environment variables
+- Settings for: LLM endpoints, Qdrant connection, embedding models, Tree-Sitter grammars, LangChain configurations
+- Validation for required settings
+
+src/preprocessing/
+------------------
+
+analyzer.py
+- Code analysis logic for different languages
+- Uses Tree-Sitter grammars to identify code constructs
+- Determines chunk boundaries based on AST nodes
+- Generates chunk metadata (function names, class hierarchies, imports)
+
+dependency_mapper.py
+- Analyzes import relationships and dependencies
+- Builds dependency graphs for code files
+- Identifies inter-file relationships for better chunking
+- Creates metadata about module dependencies
+
+metadata_extractor.py
+- Extracts semantic metadata from code chunks
+- Parses docstrings, comments, type hints
+- Identifies function signatures and class structures
+- Generates tags and categories for chunks
+
+parser.py
+- Main parsing orchestration using Tree-Sitter
+- Loads appropriate language grammars
+- Converts source code to AST representations
+- Coordinates with analyzer for chunk generation
+
+src/embedding/
+--------------
+
+batch_processor.py
+- Handles batch processing of code chunks for embedding
+- Manages batch sizes and memory limits
+- Implements retry logic for failed embeddings
+- Queue management for embedding jobs
+
+embedder.py
+- Interfaces with local or remote embedding models
+- LangChain integration for embedding providers
+- Caches embeddings to avoid recomputation
+- Handles different embedding dimensions and formats
+
+quality_validator.py
+- Validates embedding quality and consistency
+- Checks for embedding outliers or anomalies
+- Compares embeddings against known good samples
+- Filters out low-quality or corrupted embeddings
+
+src/retrieval/
+---------------
+
+candidate_selection.py
+- Selects initial candidate chunks for queries
+- Implements pre-filtering based on metadata
+- Uses inverted indexes or keyword matching
+- Reduces search space before vector similarity
+
+hybrid_search.py
+- Combines BM25 keyword search with vector similarity
+- Weights different search components
+- Implements hybrid scoring algorithms
+- Coordinates between sparse and dense retrieval
+
+main.py
+- High-level retrieval orchestration
+- Processes user queries through the retrieval pipeline
+- Coordinates preprocessing, searching, and reranking
+- Returns ranked document candidates
+
+query_processor.py
+- Prepares and preprocesses user queries
+- Query expansion and rewriting
+- Extracts keywords and entities from queries
+- Handles query intent classification
+
+search.py
+- Core vector search implementation
+- Qdrant client integration for similarity search
+- Handles different distance metrics (cosine, dot product, euclidean)
+- Implements search with filters and limits
+
+src/reranking/
+--------------
+
+cross_encoder.py
+- Cross-encoder model for pairwise ranking
+- Local LLM integration for relevance scoring
+- Compares query-chunk pairs for better ranking
+- Implements sliding window reranking on top-k results
+
+input_processor.py
+- Prepares data for reranking models
+- Formats query-document pairs for cross-encoder input
+- Handles tokenization and sequence length limits
+- Manages batch processing for reranking
+
+quality_filter.py
+- Post-reranking quality filtering
+- Applies thresholds for relevance scores
+- Removes duplicate or near-duplicate results
+- Ensures diversity in final results
+
+ranking_algorithm.py
+- Implements various ranking algorithms
+- Combines embedding similarity with cross-encoder scores
+- Learns to rank approaches (if using ML)
+- Handles confidence scores and uncertainty
+
+scoring.py
+- Unified scoring system for results
+- Normalizes scores from different components
+- Applies boosting factors for metadata matches
+- Calculates final relevance rankings
+
+similarity.py
+- Advanced similarity computation methods
+- Implements different distance/similarity metrics
+- Handles multimodal similarity (text, code, metadata)
+- Optimizes similarity calculations at scale
+
+src/generation/
+---------------
+
+context_builder.py
+- Builds context windows from retrieved chunks
+- Implements context compression and selection
+- Handles prompt engineering for generation
+- Manages conversation history and memory
+
+generator.py
+- Interfaces with local LLMs for text generation
+- LangChain integration for LLM providers
+- Implements streaming and batch generation
+- Handles model parameters (temperature, top-k, etc.)
+
+prompt_constructor.py
+- Constructs sophisticated prompts for generation
+- Includes retrieved context, query, and instructions
+- Implements different prompt templates
+- Handles few-shot examples and chain-of-thought prompts
+
+scripts/ingest.py
+-----------------
+- Batch ingestion script for codebases
+- Walks directory trees and processes files
+- Orchestrates the full indexing pipeline
+- Handles error reporting and progress tracking
+- Supports incremental updates and deletions
+
+data/
+-----
+- collections/: Qdrant collection definitions and schemas
+- embeddings/: Cached embeddings for faster indexing
+- payloads/: Metadata and document payloads for indexing
+
+docker/
+-------
+- embedding_model/Dockerfile: Container for local embedding model (e.g., code2vec, custom transformers)
+- mistral_model/Dockerfile: Container for Mistral or other local LLMs
+- reranking_model/Dockerfile: Container for reranking/cross-encoder models
+
+docker-compose.yml
+------------------
+- Service definitions for all Docker containers
+- Networking between Qdrant, embedding models, and LLMs
+- Volume mounts for data persistence
+- Environment variable passing for configuration
+
+tests/
+------
+- Unit tests for each module
+- Integration tests for pipeline components
+- Mock external services (Qdrant, LLMs)
+- Performance and accuracy tests
+
+Pipeline Flow:
+1. main.py -> ingest command triggers scripts/ingest.py
+2. Ingest walks code directories
+3. Files processed by src/preprocessing/* (parser.py orchestrates Tree-Sitter parsing)
+4. Code chunks generated and analyzed
+5. src/embedding/* creates vector embeddings (batch_processor.py manages batching)
+6. Vectors stored in Qdrant (via src/retrieval/search.py for indexing operations)
+7. Pipeline complete - ready for retrieval and generation phases
+
+Key Technologies Integration:
+- LangChain: Orchestrates embedding, retrieval, and generation chains in main.py and generation modules
+- Tree-Sitter: Used in parser.py and analyzer.py for code AST parsing and chunking
+- Qdrant: Vector database integration in search.py for indexing and querying
+- Local LLMs: Containers in docker/ for generation (generator.py) and reranking (cross_encoder.py)
