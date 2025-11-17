@@ -1,0 +1,80 @@
+# Mapping of chunk_processor.py Components to New File Structure
+
+## Function/Class to File Mapping
+
+### From old_code/chunk_processor.py:
+
+#### ChunkPreprocessor class and methods:
+- `ChunkPreprocessor.__init__()` -> `src/preprocessing/preprocessor.py:ChunkPreprocessor.__init__()`
+- `ChunkPreprocessor.deduplicate()` -> `src/preprocessing/preprocessor.py:ChunkPreprocessor.deduplicate()`
+- `ChunkPreprocessor.enhance_chunk()` -> `src/preprocessing/preprocessor.py:ChunkPreprocessor.enhance_chunk()`
+- `ChunkPreprocessor.validate_chunk()` -> `src/preprocessing/preprocessor.py:ChunkPreprocessor.validate_chunk()`
+- `ChunkPreprocessor.process()` -> `src/preprocessing/preprocessor.py:ChunkPreprocessor.process()`
+
+#### EmbeddingConfig dataclass:
+- `EmbeddingConfig` -> `src/embedding/embedder.py:EmbeddingConfig`
+
+#### EmbeddingGenerator class and methods:
+- `EmbeddingGenerator.__init__()` -> `src/embedding/embedder.py:EmbeddingGenerator.__init__()`
+- `EmbeddingGenerator.generate_embedding_ollama()` -> `src/embedding/embedder.py:EmbeddingGenerator.generate_embedding_ollama()`
+- `EmbeddingGenerator.generate_batch()` -> `src/embedding/embedder.py:EmbeddingGenerator.generate_batch()`
+- `EmbeddingGenerator.generate_all()` -> `src/embedding/embedder.py:EmbeddingGenerator.generate_all()`
+
+#### QdrantConfig dataclass:
+- `QdrantConfig` -> `src/retrieval/search.py:QdrantConfig`
+
+#### QdrantIndexer class and methods:
+- `QdrantIndexer.__init__()` -> `src/retrieval/search.py:QdrantIndexer.__init__()`
+- `QdrantIndexer.create_collections()` -> `src/retrieval/search.py:QdrantIndexer.create_collections()`
+- `QdrantIndexer._get_collection_for_chunk()` -> `src/retrieval/search.py:QdrantIndexer._get_collection_for_chunk()`
+- `QdrantIndexer._prepare_payload()` -> `src/retrieval/search.py:QdrantIndexer._prepare_payload()`
+- `QdrantIndexer.index_chunks()` -> `src/retrieval/search.py:QdrantIndexer.index_chunks()`
+- `QdrantIndexer.test_search()` -> `src/retrieval/search.py:QdrantIndexer.test_search()`
+
+## New Code Created
+
+### src/preprocessing/preprocessor.py (NEW FILE):
+- Created new file with ChunkPreprocessor class
+- Added proper imports and docstrings
+- Converted class from regular to dataclass for consistency
+
+### src/embedding/batch_processor.py:
+- Added `BatchProcessor` class (new)
+- Added `process_batches()` method (new)
+- Added `validate_batch_sizes()` method (new)
+- Simplified to use the embedder from embedder.py
+
+### src/embedding/embedder.py (was empty):
+- Added complete EmbeddingConfig and EmbeddingGenerator classes
+- Added proper imports and type hints
+- Maintained all original functionality
+
+### src/retrieval/search.py (was empty):
+- Added complete QdrantConfig and QdrantIndexer classes
+- Added proper imports including Qdrant client models
+- Maintained all original functionality with imports fixed
+
+## Integration Points
+
+### main.py modifications needed:
+- Import new classes from their respective modules
+- Add CLI commands for `embed` and `index` operations
+- Add FastAPI endpoints for `/embed-chunks` and `/index-chunks`
+- Integrate preprocessing -> embedding -> indexing pipeline
+
+### Pipeline Flow:
+1. `main.py` (ingest command) -> `src/preprocessing/preprocessor.py:ChunkPreprocessor.process()`
+2. Preprocessed chunks -> `src/embedding/embedder.py:EmbeddingGenerator.generate_all()`
+3. Embedded chunks -> `src/retrieval/search.py:QdrantIndexer.index_chunks()`
+
+## Dependencies Added:
+- `src/embedding/embedder.py` imports from `src/retrieval/search.py` (for EmbeddingGenerator in test_search)
+- `src/embedding/batch_processor.py` imports from `src/embedding/embedder.py`
+- All files maintain original external dependencies (qdrant-client, requests, tqdm, rich, etc.)
+
+
+Pipeline Flow Now Available:
+CLI: python main.py preprocess --input chunks.json --output processed.json
+CLI: python main.py embed --input processed.json --output embedded.json
+CLI: python main.py index --input embedded.json
+API: POST to /preprocess-chunks, /embed-chunks, /index-chunks
