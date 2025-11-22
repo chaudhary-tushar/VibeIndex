@@ -1,5 +1,16 @@
 I'll help you design a comprehensive RAG system for code indexing. Let me break down the architecture and processes you need.
 
+## Missing Functionality
+
+The core codebase structure is in place, but the **Reranking Layer** is not yet implemented. The following files are currently empty and need to be implemented to complete the architecture:
+
+*   `src/reranking/input_processor.py`
+*   `src/reranking/cross_encoder.py`
+*   `src/reranking/scoring.py`
+*   `src/reranking/similarity.py`
+*   `src/reranking/ranking_algorithm.py`
+*   `src/reranking/quality_filter.py`
+
 ## Architecture Overview## Essential Tools & Components You Need
 
 ### 1. **Code Parsing & Chunking Tools**
@@ -10,7 +21,7 @@ I'll help you design a comprehensive RAG system for code indexing. Let me break 
 
 ### 2. **Preprocessing Pipeline**
 - **AST-based chunking**: Preserve code structure and context
-- **Metadata extraction**: 
+- **Metadata extraction**:
   - File paths, line numbers
   - Function signatures, docstrings
   - Import statements, dependencies
@@ -116,7 +127,7 @@ Store references to:
 
 You'll need:
 - **qdrant** service
-- **embeddinggamma** service  
+- **embeddinggamma** service
 - **indexing-worker** service (your custom indexing pipeline)
 - **mistral-code** service (for inference)
 - Shared volumes for code repository and models

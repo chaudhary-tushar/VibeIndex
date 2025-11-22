@@ -3,9 +3,10 @@ Code analysis and parsing logic for different languages
 """
 
 import re
+import hashlib
 import libcst as cst
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from rich.console import Console
 from tree_sitter import Node
 
@@ -384,3 +385,278 @@ class Analyzer:
                     deps.add(match.split('/')[0])
 
         return sorted(deps)[:10]  # return list, deduped
+
+    # ============================================================================
+    # ENHANCED METADATA EXTRACTION METHODS (Migrated from enhanced.py)
+    # ============================================================================
+
+    def add_location_metadata(self, chunk: CodeChunk, node=None) -> None:
+        """Add detailed location info from a Tree-sitter node (from enhanced.py)"""
+        if chunk.language == "python":
+            chunk.location = {
+                "start_line": chunk.start_line,
+                "end_line": chunk.end_line,
+                "start_column": 0,
+                "end_column": 0,
+            }
+            return
+
+        if node is None:
+            chunk.location = {
+                "start_line": chunk.start_line,
+                "end_line": chunk.end_line,
+                "start_column": 0,
+                "end_column": 0
+            }
+            return
+
+        start_point = getattr(node, "start_point", None)
+        end_point = getattr(node, "end_point", None)
+
+        if not start_point or not end_point:
+            chunk.location = {
+                "start_line": chunk.start_line,
+                "end_line": chunk.end_line,
+                "start_column": 0,
+                "end_column": 0
+            }
+            return
+
+        start_line, start_col = start_point
+        end_line, end_col = end_point
+
+        chunk.location = {
+            "start_line": start_line + 1,
+            "end_line": end_line + 1,
+            "start_column": start_col + 1,
+            "end_column": end_col + 1
+        }
+
+    def add_code_metadata(self, chunk: CodeChunk, node=None, code_bytes: bytes = None) -> None:
+        """Extract code-specific metadata (from enhanced.py)"""
+        metadata = {}
+
+        if chunk.language == 'python':
+            metadata['decorators'] = self._extract_decorators(node, code_bytes) if node else []
+            metadata['base_classes'] = self._extract_base_classes(node, code_bytes) if node else []
+            metadata['access_modifier'] = self._determine_access_modifier(chunk.code)
+            metadata['is_abstract'] = self._is_abstract(chunk.code)
+            metadata['is_final'] = self._is_final(chunk.code)
+
+        elif chunk.language in ['javascript', 'typescript']:
+            metadata['export_type'] = self._extract_export_type(chunk.code)
+            metadata['is_async'] = 'async' in chunk.code
+
+        chunk.metadata.update(metadata)
+
+    def _extract_decorators(self, node, code_bytes: bytes) -> List[str]:
+        """Extract decorators from Python AST or CST nodes (from enhanced.py)"""
+        decorators = []
+
+        if hasattr(node, "decorators"):
+            for deco in node.decorators:
+                try:
+                    decorators.append(cst.Module([]).code_for_node(deco).strip())
+                except Exception:
+                    continue
+            return decorators
+
+        if not hasattr(node, 'children'):
+            return decorators
+
+        for child in node.children:
+            if hasattr(child, 'type') and child.type == 'decorator':
+                try:
+                    deco = code_bytes[child.start_byte:child.end_byte].decode('utf-8').strip()
+                    decorators.append(deco)
+                except Exception:
+                    continue
+
+        return decorators
+
+    def _extract_base_classes(self, node, code_bytes: bytes) -> List[str]:
+        """Extract base classes from class definitions (from enhanced.py)"""
+        base_classes = []
+
+        if hasattr(node, "bases"):
+            for base in node.bases:
+                try:
+                    base_classes.append(cst.Module([]).code_for_node(base.value).strip())
+                except Exception:
+                    continue
+            return base_classes
+
+        if hasattr(node, 'children'):
+            for child in node.children:
+                if hasattr(child, 'type') and child.type == 'argument_list':
+                    for arg in child.children:
+                        if arg.type not in ['(', ')']:
+                            try:
+                                base_classes.append(code_bytes[arg.start_byte:arg.end_byte].decode('utf-8').strip())
+                            except Exception:
+                                continue
+
+        return base_classes
+
+    def _determine_access_modifier(self, code: str) -> str:
+        """Determine access modifier (from enhanced.py)"""
+        if code.startswith('_') and not code.startswith('__'):
+            return 'protected'
+        elif code.startswith('__'):
+            return 'private'
+        return 'public'
+
+    def _is_abstract(self, code: str) -> bool:
+        """Check if class/method is abstract (from enhanced.py)"""
+        return 'abstract' in code or 'ABC' in code
+
+    def _is_final(self, code: str) -> bool:
+        """Check if class/method is final (from enhanced.py)"""
+        return 'final' in code or '@final' in code
+
+    def _extract_export_type(self, code: str) -> str:
+        """Extract export type for JS/TS (from enhanced.py)"""
+        if 'export default' in code:
+            return 'default'
+        elif 'export' in code:
+            return 'named'
+        return 'none'
+
+    def add_analysis_metadata(self, chunk: CodeChunk) -> None:
+        """Add accurate, dynamic analysis metadata (from enhanced.py)"""
+        complexity = self._calculate_complexity(chunk.code)
+        token_count = self._count_tokens(chunk.code, chunk.language)
+        embedding_size = getattr(self, "embedding_size", None) or 768
+        semantic_hash = self._generate_semantic_hash(chunk.code)
+
+        start = chunk.location.get("start_line", 1)
+        end = chunk.location.get("end_line", start)
+        line_count = max(1, end - start + 1)
+
+        chunk.analysis = {
+            "complexity": complexity,
+            "token_count": token_count,
+            "embedding_size": embedding_size,
+            "semantic_hash": semantic_hash,
+            "line_count": line_count,
+        }
+
+    def _count_tokens(self, code: str, language: str) -> int:
+        """Estimate or compute token count (from enhanced.py)"""
+        if language == "python":
+            try:
+                import tokenize
+                from io import BytesIO
+                tokens = list(tokenize.tokenize(BytesIO(code.encode("utf-8")).readline))
+                return len(tokens)
+            except Exception:
+                return len(code.split())
+        else:
+            return len(code.split())
+
+    def _generate_semantic_hash(self, code: str) -> str:
+        """Generate a semantic hash (from enhanced.py)"""
+        clean_code = re.sub(r'#.*$', '', code, flags=re.MULTILINE)
+        clean_code = re.sub(r'\s+', ' ', clean_code).strip()
+        return hashlib.md5(clean_code.encode()).hexdigest()[:10]
+
+    def add_relationship_metadata(self, chunk: CodeChunk, all_chunks: List[CodeChunk] = None) -> None:
+        """Add comprehensive relationship metadata (from enhanced.py)"""
+        chunk.relationships = {
+            "imports": self._extract_imports(chunk.code, chunk.language),
+            "dependencies": chunk.dependencies or [],
+            "parent": chunk.parent,
+            "children": self._find_child_chunks(chunk, all_chunks or []),
+            "references": chunk.references or [],
+            "called_functions": self._extract_called_functions(chunk.code, chunk.language),
+            "defined_symbols": chunk.defines or []
+        }
+
+    def _extract_imports(self, code: str, language: str) -> List[str]:
+        """Extract import statements (from enhanced.py)"""
+        imports = []
+        lines = code.split('\n')
+
+        if language == 'python':
+            for line in lines:
+                line = line.strip()
+                if line.startswith(('import ', 'from ')):
+                    imports.append(line)
+        elif language in ['javascript', 'typescript']:
+            for line in lines:
+                line = line.strip()
+                if line.startswith(('import ', 'export ', 'require(')):
+                    imports.append(line)
+
+        return imports
+
+    def _extract_called_functions(self, code: str, language: str) -> List[str]:
+        """Extract function calls from code (from enhanced.py)"""
+        called_functions = []
+
+        if language == 'python':
+            pattern = r'(\b[a-zA-Z_][a-zA-Z0-9_]*)\s*\('
+            matches = re.findall(pattern, code)
+            keywords = {'if', 'for', 'while', 'with', 'def', 'class', 'return'}
+            called_functions = [m for m in matches if m not in keywords]
+
+        return called_functions
+
+    def _find_child_chunks(self, chunk: CodeChunk, all_chunks: List[CodeChunk]) -> List[str]:
+        """Find IDs of child chunks (from enhanced.py)"""
+        children = []
+        if chunk.type == 'class':
+            for c in all_chunks:
+                if getattr(c, 'parent', None) == chunk.name and c.file_path == chunk.file_path:
+                    children.append(c.id)
+        return children
+
+    def add_context_metadata(self, chunk: CodeChunk, file_path: Path, project_path: Path = None) -> None:
+        """Add contextual information (from enhanced.py)"""
+        chunk.context = {
+            "module_context": self._get_module_context(file_path),
+            "project_context": self._get_project_context(project_path),
+            "file_hierarchy": self._get_file_hierarchy(file_path),
+            "domain_context": self._infer_domain_context(chunk, file_path)
+        }
+
+    def _get_module_context(self, file_path: Path) -> str:
+        """Get module-level context (from enhanced.py)"""
+        parent_dir = file_path.parent.name
+        if parent_dir:
+            return f"{parent_dir} module"
+        return "root module"
+
+    def _get_project_context(self, project_path: Path = None) -> str:
+        """Infer project context from structure (from enhanced.py)"""
+        return "Project codebase"
+
+    def _get_file_hierarchy(self, file_path: Path) -> List[str]:
+        """Get file hierarchy as list (from enhanced.py)"""
+        return list(file_path.parts)
+
+    def _infer_domain_context(self, chunk: CodeChunk, file_path: Path) -> str:
+        """Infer domain context from file path and content (from enhanced.py)"""
+        path_str = str(file_path).lower()
+
+        if 'admin' in path_str:
+            return "Django admin configuration"
+        elif 'model' in path_str or 'models' in path_str:
+            return "Data models and schema"
+        elif 'view' in path_str or 'controller' in path_str:
+            return "Application logic and controllers"
+        elif 'test' in path_str:
+            return "Testing code"
+        elif any(ui in path_str for ui in ['template', 'component', 'ui', 'css']):
+            return "User interface"
+
+        return "General application code"
+
+    def enhance_chunk_completely(self, chunk: CodeChunk, node=None, code_bytes: bytes = None, file_path: Path = None, project_path: Path = None, all_chunks: List[CodeChunk] = None) -> None:
+        """Full enhancement pipeline for a chunk (from enhanced.py)"""
+        self.add_location_metadata(chunk, node)
+        self.add_code_metadata(chunk, node, code_bytes)
+        self.add_analysis_metadata(chunk)
+        if file_path:
+            self.add_relationship_metadata(chunk, all_chunks or [])
+            self.add_context_metadata(chunk, file_path, project_path)

@@ -10,12 +10,21 @@ import asyncio
 
 # Import our preprocessing modules
 from src.preprocessing import parse_project, parse_file, CodeParser
-from src.preprocessing.preprocessor import ChunkPreprocessor
-from src.embedding.embedder import EmbeddingGenerator, EmbeddingConfig
+from src.preprocessing.chunk import ChunkPreprocessor
+from src.embedding.embedder import EmbeddingGenerator
 from src.embedding.batch_processor import BatchProcessor
-from src.retrieval.search import QdrantIndexer, QdrantConfig
+from src.retrieval.search import QdrantIndexer, index_from_embedded_json
+from src.retrieval.hybrid_search import setup_hybrid_collection
+from src.config import EmbeddingConfig, QdrantConfig
+from src.config import EmbeddingConfig, QdrantConfig
 from src.generation.context_builder import ContextEnricher, stats_check, get_summarized_chunks_ids
+from src.generation import BatchProcessor_2
 
+from rich.console import Console
+from rich.markdown import Markdown
+from src.retrieval import CodeRAG_2
+
+console = Console()
 app = FastAPI(title="RAG Code Parser API", description="API for parsing code into chunks for RAG indexing")
 
 @app.get("/")
@@ -313,6 +322,59 @@ async def api_enrich_chunks(request: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Enrichment error: {str(e)}")
 
+@app.post("/batch-prompts")
+async def api_batch_prompts(request: dict):
+    """Batch process prompts through LLM"""
+    input_path = request.get("input_path")
+    output_file = request.get("output_file")
+    output_format = request.get("output_format", "jsonl")
+    delay = request.get("delay", 0.2)
+    model = request.get("model")
+
+    if not input_path or not os.path.exists(input_path):
+        raise HTTPException(status_code=400, detail="Valid input_path required")
+
+    try:
+        if model:
+            os.environ["LLM_MODEL"] = model
+        processor = BatchProcessor_2(delay=delay)
+        prompts = processor.load_prompts(input_path)
+        results = processor.process_prompts(prompts, output_file, output_format)
+        return {
+            "message": f"Processed {len(results)} prompts",
+            "num_prompts": len(prompts),
+            "output_file": output_file
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch processing error: {str(e)}")
+
+@app.post("/api/index-embedded")
+async def api_index_embedded(request: dict):
+    """Index pre-embedded JSON chunks"""
+    path = request.get("path")
+    if not path:
+        raise HTTPException(status_code=400, detail='"path" is required')
+    embedding_dim = request.get("embedding_dim", 768)
+    collection_prefix = request.get("collection_prefix", "default")
+    try:
+        index_from_embedded_json(path, embedding_dim, collection_prefix)
+        return {"status": "success", "message": "Pre-embedded JSON indexed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Indexing error: {str(e)}")
+
+@app.post("/api/hybrid-setup")
+async def api_hybrid_setup(request: dict):
+    """Setup hybrid search collection"""
+    collection_name = request.get("collection_name")
+    chunks_path = request.get("chunks_path")
+    if not collection_name or not chunks_path:
+        raise HTTPException(status_code=400, detail='"collection_name" and "chunks_path" are required')
+    try:
+        setup_hybrid_collection(collection_name, chunks_path)
+        return {"status": "success", "message": "Hybrid collection setup complete"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Hybrid setup error: {str(e)}")
+
 @click.group()
 def cli():
     """RAG Code Parser CLI"""
@@ -507,6 +569,33 @@ def index(input, host, port, collection_prefix, verbose):
         return 1
 
 @cli.command()
+@click.option('--path', '-p', required=True, help='Path to pre-embedded JSON file')
+@click.option('--embedding-dim', '-d', default=768, type=int, help='Embedding dimension')
+@click.option('--collection-prefix', '-c', default='default', help='Collection prefix')
+def index_embedded(path, embedding_dim, collection_prefix):
+    console.print(f"[bold blue]Indexing pre-embedded JSON from:[/bold blue] {path}")
+    console.print(f"Embedding dim: {embedding_dim}, Prefix: {collection_prefix}")
+    try:
+        index_from_embedded_json(path, embedding_dim, collection_prefix)
+        console.print("[bold green]✅ index_embedded complete![/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Error: {e}[/bold red]")
+        return 1
+
+@cli.command()
+@click.option('--collection-name', '-n', required=True, help='Name of the hybrid collection')
+@click.option('--chunks-path', '-p', required=True, help='Path to chunks JSON file')
+def hybrid_setup(collection_name, chunks_path):
+    console.print(f"[bold blue]Setting up hybrid collection:[/bold blue] {collection_name}")
+    console.print(f"Using chunks: {chunks_path}")
+    try:
+        setup_hybrid_collection(collection_name, chunks_path)
+        console.print("[bold green]✅ hybrid_setup complete![/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Error: {e}[/bold red]")
+        return 1
+
+@cli.command()
 @click.option('--input', '-i', required=True, help='Input JSON file with chunks')
 @click.option('--output', '-o', required=True, help='Output enriched JSON file')
 @click.option('--symbol-index', '-s', help='Optional symbol index JSON file')
@@ -565,6 +654,24 @@ def enrich(input, output, symbol_index, model):
         return 1
 
 @cli.command()
+@click.option('--input', '-i', required=True, help='Input .txt file or directory of .txt files with prompts (one per line)')
+@click.option('--output', '-o', help='Output file (jsonl/json/csv)')
+@click.option('--fmt', '-f', default='jsonl', type=click.Choice(['jsonl', 'json', 'csv']), help='Output format')
+@click.option('--delay', default=0.2, type=float, help='Delay (seconds) between requests')
+@click.option('--model', '-m', help='Override LLM model name')
+def batch(input_path, output, fmt, delay, model):
+    """
+    Batch process prompts through LLM.
+    """
+    click.echo(f"🔄 Batch processing prompts from: {input_path}")
+    if model:
+        os.environ["LLM_MODEL"] = model
+    processor = BatchProcessor_2(delay=delay)
+    prompts = processor.load_prompts(input_path)
+    processor.process_prompts(prompts, output, fmt)
+    click.echo("\n✅ Batch processing complete!")
+
+@cli.command()
 @click.option('--host', default='0.0.0.0', help='Host to bind to')
 @click.option('--port', default=8000, type=int, help='Port to bind to')
 @click.option('--reload', is_flag=True, help='Enable auto-reload for development')
@@ -577,7 +684,6 @@ def api(host, port, reload):
     # Mount static files if they exist
     if os.path.exists('static'):
         app.mount("/static", StaticFiles(directory="static"), name="static")
-
     uvicorn.run(
         "main:app",
         host=host,
@@ -585,6 +691,132 @@ def api(host, port, reload):
         reload=reload,
         log_level="info"
     )
+
+@cli.command()
+@click.option('--qdrant-host', default='localhost', help='Qdrant host')
+@click.option('--qdrant-port', default=6333, type=int, help='Qdrant port')
+@click.option('--collection-prefix', default='tipsy', help='Collection prefix')
+@click.option('--llm-url', default='http://localhost:12434/', help='LLM API URL')
+@click.option('--llm-model', default='ai/llama3.2:latest', help='LLM model')
+@click.option('--embedding-model', default='ai/embeddinggemma', help='Embedding model')
+def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embedding_model):
+    """
+    Interactive RAG query CLI using CodeRAG_2
+    """
+    from src.config import EmbeddingConfig, QdrantConfig
+
+    embedding_config = EmbeddingConfig(
+        model_url=f"{llm_url}engines/llama.cpp/v1",
+        model_name=embedding_model,
+        embedding_dim=768,
+        batch_size=32
+    )
+    qdrant_config = QdrantConfig(
+        host=qdrant_host,
+        port=qdrant_port,
+        collection_prefix=collection_prefix
+    )
+
+    rag_system = CodeRAG_2(
+        embedding_config=embedding_config,
+        qdrant_config=qdrant_config,
+        llm_api_url=llm_url,
+        llm_model_name=llm_model
+    )
+
+    console.print("[bold green]CodeRAG_2 Interactive CLI Ready![/bold green]")
+    while True:
+        try:
+            query = input("\n❓ Your question about the codebase: ").strip()
+            if not query or query.lower() in {"quit", "exit"}:
+                break
+
+            console.print("[cyan]🔍 Searching codebase...[/cyan]")
+            answer = rag_system.query_codebase(query)
+
+            console.print("\n[bold green]🤖 Answer:[/bold green]")
+            console.print(Markdown(answer))
+
+        except KeyboardInterrupt:
+            console.print("\n[red]Goodbye![/red]")
+            break
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+
+@cli.command()
+@click.option('--qdrant-host', default='localhost', help='Qdrant host')
+@click.option('--qdrant-port', default=6333, type=int, help='Qdrant port')
+@click.option('--collection-name', default='default', help='Collection name to search in')
+@click.option('--embedding-model', default='ai/embeddinggemma', help='Embedding model')
+def advanced_rag(qdrant_host, qdrant_port, collection_name, embedding_model):
+    """
+    Advanced RAG query CLI following rag2.mermaid architecture with reranking
+    """
+    from src.config import EmbeddingConfig, QdrantConfig
+    from src.retrieval.hybrid_search import HybridSearchEngine, HybridSearchConfig
+    from src.retrieval.complete_retrieval_system import CompleteRetrievalSystem
+    from qdrant_client import QdrantClient
+
+    # Setup configurations
+    embedding_config = EmbeddingConfig(
+        model_url="http://localhost:12434/engines/llama.cpp/v1",
+        model_name=embedding_model,
+        embedding_dim=768,
+        batch_size=32
+    )
+    qdrant_config = QdrantConfig(
+        host=qdrant_host,
+        port=qdrant_port,
+        collection_prefix=""
+    )
+
+    # Initialize components
+    qdrant_client = QdrantClient(host=qdrant_host, port=qdrant_port)
+    embedding_generator = EmbeddingGenerator(embedding_config)
+
+    hybrid_search_config = HybridSearchConfig()
+    hybrid_search_engine = HybridSearchEngine(
+        qdrant_client=qdrant_client,
+        embedding_generator=embedding_generator,
+        config=hybrid_search_config
+    )
+
+    # Create the complete retrieval system following rag2.mermaid architecture
+    retrieval_system = CompleteRetrievalSystem(
+        hybrid_search_engine=hybrid_search_engine,
+        embedding_generator=embedding_generator
+    )
+
+    console.print("[bold blue]Advanced RAG (rag2.mermaid) Interactive CLI Ready![/bold blue]")
+    console.print("[bold]Features:[/bold] Hybrid Search + Initial Candidate Selection + Reranking + Quality Assurance")
+
+    while True:
+        try:
+            query = input("\n❓ Your question about the codebase: ").strip()
+            if not query or query.lower() in {"quit", "exit"}:
+                break
+
+            console.print("[cyan]🔍 Retrieving with advanced rag2.mermaid pipeline...[/cyan]")
+            results = retrieval_system.retrieve(
+                query=query,
+                collection_name=collection_name,
+                top_k=5
+            )
+
+            console.print(f"\n[bold green]Found {len(results)} relevant code snippets:[/bold green]")
+            for i, result in enumerate(results, 1):
+                console.print(f"\n[i]{i}. [bold]{result.get('qualified_name', result.get('name', 'Unknown'))}[/bold]")
+                console.print(f"   Score: {result.get('score', 'N/A')}")
+                console.print(f"   File: {result.get('file_path', 'N/A')}")
+                console.print(f"   Preview: {result.get('code', '')[:100]}...")
+
+        except KeyboardInterrupt:
+            console.print("\n[red]Goodbye![/red]")
+            break
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
 
 if __name__ == '__main__':
     cli()

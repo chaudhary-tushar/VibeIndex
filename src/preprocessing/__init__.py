@@ -51,3 +51,19 @@ def parse_file(file_path: str, project_path: str = None) -> list[CodeChunk]:
 
     parser = CodeParser(project_path)
     return parser.parse_file(Path(file_path))
+
+"""
+Preprocessing module exports - Enhanced with advanced ChunkPreprocessor
+"""
+
+from .chunk import (
+    CodeChunk,
+    ChunkPreprocessor,  # Enhanced version
+    ChunkPreprocessor_2  # Original version for backward compatibility
+)
+
+__all__ = [
+    'CodeChunk',
+    'ChunkPreprocessor',
+    'ChunkPreprocessor_2'
+]

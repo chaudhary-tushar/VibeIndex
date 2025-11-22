@@ -1,0 +1,44 @@
+# Safe-to-Delete Planning Files Analysis
+
+## Summary Table
+
+| File                          | Safe to Delete | Reason |
+|-------------------------------|----------------|--------|
+| rag_indexing_spec.txt         | Partial       | Comprehensive RAG spec; most modules exist (preprocessing/embedding/generation/retrieval), but reranking/retrieval submodules partial/stubs (e.g., query_processor.py empty per idea_migration.md). |
+| AGENTS.md                     | Yes           | Agent guidance, lint/test cmds, patterns; not implementation tasks. |
+| GEMINI.md                     | Yes           | Generic directory overview; no specific tasks. |
+| idea_migration.md             | No            | Architecture update plan; notes ongoing gaps (quality_validator.py empty, retrieval files empty, generation partial). |
+| QWEN.md                       | Yes           | Project overview/arch; descriptive, no actionable tasks. |
+| README.md                     | Yes           | Empty file. |
+| src/preprocessing/README.md   | Yes           | Parser.py implementation guidance; descriptive. |
+| Rag.mermaid                   | Yes           | Old architecture diagram; superseded by rag2.mermaid. |
+| rag2.mermaid                  | No            | Current detailed RAG architecture diagram with reranking layer; active reference. |
+
+## File-by-File Analysis
+
+
+### rag_indexing_spec.txt
+**Original functionality/plans**: Full RAG pipeline spec listing all src/* modules/submodules.
+**Implementation status**: Mostly impl (preprocessing/embedding/generation/retrieval files exist), reranking full files but partial impl, some retrieval stubs.
+**Safe to delete?**: Partial
+**Reason**: Serves as blueprint; gaps remain.
+
+### code_reorganization_plan.md
+**Original functionality/plans**: Phased merge old_code to src/ (config, core, RAG, CLI, tests).
+**Implementation status**: Phases 1-2 complete; Phase 3 RAG partial (some empty files); CLI full.
+**Safe to delete?**: Partial
+**Reason**: Plan partially executed.
+
+### idea_migration.md
+**Original functionality/plans**: Update arch docs; impl remaining components (validator, query_processor, etc.).
+**Implementation status**: Docs updated (rag2.mermaid); impl gaps persist (empty files noted).
+**Safe to delete?**: No
+**Reason**: Ongoing gaps.
+
+### rag2.mermaid
+**Original functionality/plans**: Current RAG arch diagram w/ detailed reranking.
+**Implementation status**: Reference diagram; some components partial.
+**Safe to delete?**: No
+**Reason**: Active architecture reference.
+
+*(Other guidance/docs: Yes)*

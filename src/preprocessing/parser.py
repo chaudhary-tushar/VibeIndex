@@ -1,13 +1,17 @@
 """
 Main parser orchestration using Tree-sitter for multiple languages
+Enhanced with metadata enrichment and visualization from enhanced.py
 """
 
 import os
 import json
+import subprocess
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
 from pathspec import PathSpec
 from pathspec.patterns import GitWildMatchPattern
 from tree_sitter import Parser
@@ -131,6 +135,16 @@ class CodeParser:
             if not chunk.references:
                 chunk.references = self.analyzer.find_called_symbols(chunk.code, language, self.symbol_index)
 
+            # ENHANCED: Add comprehensive metadata (from enhanced.py)
+            self.analyzer.enhance_chunk_completely(
+                chunk,
+                node=None,
+                code_bytes=None,
+                file_path=file_path,
+                project_path=self.project_path,
+                all_chunks=self.chunks
+            )
+
         return chunks
 
     def run_ctags(self, file_path: Path) -> List[Dict]:
@@ -209,3 +223,49 @@ class CodeParser:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         console.print(f"[green]✓ Results saved to: {output_file}[/green]")
+
+    def visualize_results(self):
+        """Display beautiful visualization of results (from enhanced.py)"""
+        # Summary Statistics
+        stats_table = Table(title="📊 Parsing Statistics", show_header=True, header_style="bold magenta")
+        stats_table.add_column("Metric", style="cyan")
+        stats_table.add_column("Count", justify="right", style="green")
+
+        stats_table.add_row("Total Chunks", str(len(self.chunks)))
+        for key, value in sorted(self.stats.items()):
+            stats_table.add_row(key.replace('_', ' ').title(), str(value))
+
+        console.print(stats_table)
+        console.print()
+
+        # Language Distribution
+        lang_dist = defaultdict(int)
+        type_dist = defaultdict(int)
+
+        for chunk in self.chunks:
+            lang_dist[chunk.language] += 1
+            type_dist[chunk.type] += 1
+
+        dist_table = Table(title="📚 Distribution", show_header=True, header_style="bold blue")
+        dist_table.add_column("Language", style="cyan")
+        dist_table.add_column("Chunks", justify="right", style="yellow")
+        dist_table.add_column("Type", style="magenta")
+        dist_table.add_column("Count", justify="right", style="yellow")
+
+        max_rows = max(len(lang_dist), len(type_dist))
+        lang_items = list(lang_dist.items())
+        type_items = list(type_dist.items())
+
+        for i in range(max_rows):
+            lang = lang_items[i] if i < len(lang_items) else ("", "")
+            typ = type_items[i] if i < len(type_items) else ("", "")
+            dist_table.add_row(lang[0], str(lang[1]) if lang[1] else "", typ[0], str(typ[1]) if typ[1] else "")
+
+        console.print(dist_table)
+        console.print()
+
+    def save_symbol_index(self, output_path: str = "symbol_index.json"):
+        """Save symbol index to JSON (from enhanced.py)"""
+        with open(output_path, "w") as f:
+            json.dump(self.symbol_index, f, indent=4)
+        console.print(f"[green]✓ Symbol index saved to: {output_path}[/green]")

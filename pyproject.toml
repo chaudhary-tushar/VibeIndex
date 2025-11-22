@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.121.1",
     "pydantic>=2.12.4",
+    "pydantic-settings",
     "pytest>=9.0.1",
     "python-dotenv>=1.2.1",
     "qdrant-client>=1.15.1",
@@ -21,4 +22,6 @@ dependencies = [
     "tree-sitter-html>=0.20.0",
     "tree-sitter-css>=0.20.0",
     "libcst>=1.0.0",
+    "pytest-cov>=7.0.0",
+    "coverage>=7.12.0",
 ]
