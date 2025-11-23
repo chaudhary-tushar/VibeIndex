@@ -8,7 +8,11 @@ class RelevanceScorer:
     """Calculate relevance scores for query-document pairs"""
 
     def __init__(self):
-        pass
+        """
+        Initialize the RelevanceScorer.
+        Currently no specific initialization required.
+        """
+        # Add any initialization code here if needed in the future
 
     def calculate_scores(self, query: str, documents: list[dict]) -> list[float]:
         """

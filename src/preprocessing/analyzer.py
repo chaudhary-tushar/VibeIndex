@@ -70,10 +70,35 @@ class Analyzer:
                     )
                     chunks.append(chunk)
 
-                    # Parse methods within class
+                    # Parse methods within class (no return here)
                     for child in node.children:
                         traverse(child, parent_name=name)
-                    return
+
+            # Handle method_definition nodes (for methods within classes)
+            elif node.type == "method_definition":
+                name_node = node.child_by_field_name("name")
+                if name_node:
+                    name = code_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8")
+                    code = code_bytes[node.start_byte : node.end_byte].decode("utf-8")
+                    called_symbols = self.find_called_symbols(code, language, {})
+
+                    chunk = CodeChunk(
+                        type="method",
+                        name=name,
+                        code=code,
+                        file_path=relative_path,
+                        language=language,
+                        start_line=node.start_point[0] + 1,
+                        end_line=node.end_point[0] + 1,
+                        docstring=None,
+                        signature=code.split("\n")[0],
+                        complexity=self._calculate_complexity(code),
+                        dependencies=self._extract_dependencies(code, language),
+                        parent=parent_name, # Parent will be set by the recursive call
+                        defines=[name],
+                        references=called_symbols,
+                    )
+                    chunks.append(chunk)
 
             for child in node.children:
                 traverse(child, parent_name)
@@ -346,7 +371,8 @@ class Analyzer:
         complexity = 1
         keywords = ["if", "elif", "else", "for", "while", "and", "or", "catch", "case"]
         for keyword in keywords:
-            complexity += code.count(f" {keyword} ") + code.count(f" {keyword}(")
+            # Use regex to find whole word matches
+            complexity += len(re.findall(r'\b' + re.escape(keyword) + r'\b', code))
         return complexity
 
     def _extract_dependencies(self, code: str, language: str) -> list[str]:
@@ -401,15 +427,6 @@ class Analyzer:
 
     def add_location_metadata(self, chunk: CodeChunk, node=None) -> None:
         """Add detailed location info from a Tree-sitter node (from enhanced.py)"""
-        if chunk.language == "python":
-            chunk.location = {
-                "start_line": chunk.start_line,
-                "end_line": chunk.end_line,
-                "start_column": 0,
-                "end_column": 0,
-            }
-            return
-
         if node is None:
             chunk.location = {
                 "start_line": chunk.start_line,
@@ -422,12 +439,14 @@ class Analyzer:
         start_point = getattr(node, "start_point", None)
         end_point = getattr(node, "end_point", None)
 
+        # Handle cases where start_point or end_point might be None or empty tuple
         if not start_point or not end_point:
+            # Fallback to chunk's existing line numbers if node info is incomplete
             chunk.location = {
                 "start_line": chunk.start_line,
                 "end_line": chunk.end_line,
-                "start_column": 0,
-                "end_column": 0,
+                "start_column": 0, # Default to 0 if not available
+                "end_column": 0,   # Default to 0 if not available
             }
             return
 
@@ -440,7 +459,6 @@ class Analyzer:
             "start_column": start_col + 1,
             "end_column": end_col + 1,
         }
-
     def add_code_metadata(self, chunk: CodeChunk, node=None, code_bytes: bytes = None) -> None:
         """Extract code-specific metadata (from enhanced.py)"""
         metadata = {}

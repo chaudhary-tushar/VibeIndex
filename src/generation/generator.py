@@ -37,7 +37,12 @@ class LLMClient:
                 max_tokens=self.max_tokens,
             )
         else:
-            raise NotImplementedError(f"Provider {self.provider} not supported")
+            # Default to Ollama if provider is not supported
+            print(f"Warning: Provider {self.provider} not supported, defaulting to Ollama")
+            self.provider = "ollama"
+            self.llm = ChatOllama(
+                model=self.model, base_url=self.base_url, temperature=self.temperature, num_predict=self.max_tokens
+            )
 
     async def generate_batch(self, prompts: list[str]) -> list[str]:
         """Generate responses for a batch of prompts"""

@@ -163,11 +163,16 @@ class CodeParser:
                     if line:
                         try:
                             symbols.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            pass
+                        except json.JSONDecodeError as e:
+                            console.print(f"[yellow]Warning: Could not decode JSON line: {e}[/yellow]")
+                            continue
                 return symbols
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        except subprocess.TimeoutExpired:
+            console.print("[red]Error: ctags command timed out[/red]")
+            return []
+        except FileNotFoundError:
+            console.print("[red]Error: ctags command not found. Please install universal-ctags.[/red]")
+            return []
         return []
 
     def parse_project(self):

@@ -10,7 +10,11 @@ class RerankingInputProcessor:
     """
 
     def __init__(self):
-        pass
+        """
+        Initialize the RerankingInputProcessor.
+        Currently no specific initialization required.
+        """
+        # Add any initialization code here if needed in the future
 
     def process_input(self, query: str, candidates: list[dict], context: dict | None = None) -> list[dict]:
         """
