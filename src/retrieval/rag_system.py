@@ -1,16 +1,16 @@
-import json
+from typing import Any
+
 import requests
-from typing import List, Any
-from qdrant_client import QdrantClient
-from qdrant_client.models import Filter
 from rich.console import Console
 from rich.markdown import Markdown
 
-from src.config import EmbeddingConfig, QdrantConfig
+from src.config import EmbeddingConfig
+from src.config import QdrantConfig
 from src.embedding.embedder import EmbeddingGenerator
 from src.retrieval.search import QdrantIndexer
 
 console = Console()
+
 
 class CodeRAG_2:
     def __init__(
@@ -27,7 +27,7 @@ class CodeRAG_2:
         # Ensure collections exist with correct dimensions
         self.indexer.create_collections(embedding_config.embedding_dim)
 
-    def _get_all_collections(self) -> List[str]:
+    def _get_all_collections(self) -> list[str]:
         """Get list of all code collections"""
         return self.indexer.config.get_collection_names()
 
@@ -45,7 +45,7 @@ class CodeRAG_2:
                 results = self.indexer.client.search(
                     collection_name=coll,
                     query_vector=query_emb,
-                    limit=3  # top 3 per collection
+                    limit=3,  # top 3 per collection
                 )
                 all_results.extend(results)
             except Exception as e:
@@ -67,7 +67,7 @@ class CodeRAG_2:
         answer = self._ask_llm(prompt)
         return answer
 
-    def _build_rag_prompt(self, query: str, chunks: List[Any]) -> str:
+    def _build_rag_prompt(self, query: str, chunks: list[Any]) -> str:
         """Build prompt with retrieved code"""
         context_blocks = []
         for i, chunk in enumerate(chunks, 1):
@@ -102,7 +102,7 @@ Answer the question using ONLY the provided code snippets. If the answer isn't t
                 "model": self.llm_model,
                 "max_tokens": 8192,
                 "temperature": 0.3,
-                "stream": False
+                "stream": False,
             }
             response = requests.post(
                 f"{self.llm_url}/engines/llama.cpp/v1/completions",
@@ -114,11 +114,11 @@ Answer the question using ONLY the provided code snippets. If the answer isn't t
             if "choices" in data:
                 if "text" in data["choices"][0]:
                     return data["choices"][0]["text"].strip()
-                elif "message" in data["choices"][0]:
+                if "message" in data["choices"][0]:
                     return data["choices"][0]["message"]["content"].strip()
             return "Error: Unexpected LLM response format."
         except Exception as e:
-            return f"LLM Error: {str(e)}"
+            return f"LLM Error: {e!s}"
 
 
 # ===== MAIN ===== (Preserved for standalone usage - all original functionality)
@@ -128,26 +128,22 @@ if __name__ == "__main__":
     QDRANT_PORT = 6333
     LLM_API_URL = "http://localhost:12434/"
     LLM_MODEL = "ai/llama3.2:latest"  # e.g., "gemma-2b-it", "codellama-7b", etc.
-    COLLECTION_PREFIX = "tipsy"    # must match your indexing
+    COLLECTION_PREFIX = "tipsy"  # must match your indexing
 
     # Initialize with enhanced components
     embedding_config = EmbeddingConfig(
         model_url=f"{LLM_API_URL}/engines/llama.cpp/v1",
         model_name="ai/embeddinggemma",
         embedding_dim=768,
-        batch_size=32
+        batch_size=32,
     )
-    qdrant_config = QdrantConfig(
-        host=QDRANT_HOST,
-        port=QDRANT_PORT,
-        collection_prefix=COLLECTION_PREFIX
-    )
+    qdrant_config = QdrantConfig(host=QDRANT_HOST, port=QDRANT_PORT, collection_prefix=COLLECTION_PREFIX)
 
     rag = CodeRAG_2(
         embedding_config=embedding_config,
         qdrant_config=qdrant_config,
         llm_api_url=LLM_API_URL,
-        llm_model_name=LLM_MODEL
+        llm_model_name=LLM_MODEL,
     )
 
     # Interactive loop - preserved exactly

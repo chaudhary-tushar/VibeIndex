@@ -2,10 +2,8 @@
 Batch processing utilities for embedding generation
 """
 
-from typing import List, Dict, Any
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
-from .embedder import EmbeddingGenerator, EmbeddingConfig
+from .embedder import EmbeddingConfig
+from .embedder import EmbeddingGenerator
 
 
 class BatchProcessor:
@@ -15,11 +13,11 @@ class BatchProcessor:
         self.config = config
         self.embedder = EmbeddingGenerator(config)
 
-    def process_batches(self, chunks: List[Dict], parallel: bool = True) -> List[Dict]:
+    def process_batches(self, chunks: list[dict], parallel: bool = True) -> list[dict]:
         """Process chunks in batches for embedding"""
         return self.embedder.generate_all(chunks, parallel)
 
-    def validate_batch_sizes(self, chunks: List[Dict]) -> bool:
+    def validate_batch_sizes(self, chunks: list[dict]) -> bool:
         """Validate that batch sizes are appropriate"""
         total_chunks = len(chunks)
         if total_chunks == 0:

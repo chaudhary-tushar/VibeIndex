@@ -1,7 +1,6 @@
-import os
-from config.settings import settings
-from src.preprocessing.parser import parse_code
 from src.embedding.embedder import embed_code
+from src.preprocessing.parser import parse_code
+
 
 def main():
     # TODO: Implement logic to read files from the code repository
@@ -16,6 +15,7 @@ def main():
 
         # 3. Store the embeddings in Qdrant
         # TODO: Implement Qdrant storage logic
+
 
 if __name__ == "__main__":
     main()

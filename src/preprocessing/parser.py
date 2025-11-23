@@ -3,24 +3,21 @@ Main parser orchestration using Tree-sitter for multiple languages
 Enhanced with metadata enrichment and visualization from enhanced.py
 """
 
-import os
 import json
-import subprocess
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 from collections import defaultdict
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
+from pathlib import Path
+
 from pathspec import PathSpec
 from pathspec.patterns import GitWildMatchPattern
+from rich.console import Console
+from rich.table import Table
 from tree_sitter import Parser
 
-from .chunk import CodeChunk
-from .language_config import LanguageConfig
 from .analyzer import Analyzer
-from .metadata_extractor import MetadataExtractor
+from .chunk import CodeChunk
 from .dependency_mapper import DependencyMapper
+from .language_config import LanguageConfig
+from .metadata_extractor import MetadataExtractor
 
 console = Console()
 
@@ -31,7 +28,7 @@ class CodeParser:
     def __init__(self, project_path: str):
         self.project_path = Path(project_path).resolve()
         self.parsers = {}
-        self.chunks: List[CodeChunk] = []
+        self.chunks: list[CodeChunk] = []
         self.stats = defaultdict(int)
         self.ignore_spec = self._load_gitignore()
         self.symbol_index = {}
@@ -39,14 +36,14 @@ class CodeParser:
         self.metadata_extractor = MetadataExtractor()
         self.dependency_mapper = DependencyMapper()
 
-    def _load_gitignore(self) -> Optional[PathSpec]:
+    def _load_gitignore(self) -> PathSpec | None:
         """Load .gitignore patterns"""
-        gitignore_path = self.project_path / '.gitignore'
+        gitignore_path = self.project_path / ".gitignore"
         patterns = LanguageConfig.DEFAULT_IGNORE_PATTERNS.copy()
 
         if gitignore_path.exists():
-            with open(gitignore_path, 'r') as f:
-                patterns.extend(line.strip() for line in f if line.strip() and not line.startswith('#'))
+            with Path(gitignore_path).open() as f:
+                patterns.extend(line.strip() for line in f if line.strip() and not line.startswith("#"))
 
         return PathSpec.from_lines(GitWildMatchPattern, patterns)
 
@@ -75,19 +72,19 @@ class CodeParser:
                 return None
         return self.parsers[language]
 
-    def discover_files(self) -> List[Path]:
+    def discover_files(self) -> list[Path]:
         """Discover all code files in project"""
         files = []
 
         for ext, lang in LanguageConfig.LANGUAGE_MAP.items():
-            for file_path in self.project_path.rglob(f'*{ext}'):
+            for file_path in self.project_path.rglob(f"*{ext}"):
                 if not self._should_ignore(file_path):
                     files.append(file_path)
-                    self.stats[f'files_{lang}'] += 1
+                    self.stats[f"files_{lang}"] += 1
 
         return files
 
-    def parse_file(self, file_path: Path) -> List[CodeChunk]:
+    def parse_file(self, file_path: Path) -> list[CodeChunk]:
         """Parse a single file using the appropriate method"""
         ext = file_path.suffix
         language = LanguageConfig.LANGUAGE_MAP.get(ext)
@@ -100,7 +97,7 @@ class CodeParser:
         if not parser:
             return []
 
-        with open(file_path, 'rb') as f:
+        with Path(file_path).open("rb") as f:
             code_bytes = f.read()
 
         try:
@@ -142,25 +139,27 @@ class CodeParser:
                 code_bytes=None,
                 file_path=file_path,
                 project_path=self.project_path,
-                all_chunks=self.chunks
+                all_chunks=self.chunks,
             )
 
         return chunks
 
-    def run_ctags(self, file_path: Path) -> List[Dict]:
+    def run_ctags(self, file_path: Path) -> list[dict]:
         """Extract symbols using universal-ctags"""
         try:
             import subprocess
+
             result = subprocess.run(
-                ['ctags', '-f', '-', '--output-format=json', str(file_path)],
+                ["ctags", "-f", "-", "--output-format=json", str(file_path)],
+                check=False,
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
             )
 
             if result.returncode == 0:
                 symbols = []
-                for line in result.stdout.strip().split('\n'):
+                for line in result.stdout.strip().split("\n"):
                     if line:
                         try:
                             symbols.append(json.loads(line))
@@ -191,18 +190,18 @@ class CodeParser:
 
                 # Build symbol index for cross-references
                 ctag_symbols = self.run_ctags(file_path)
-                self.stats['ctags_symbols'] += len(ctag_symbols)
+                self.stats["ctags_symbols"] += len(ctag_symbols)
 
                 for sym in ctag_symbols:
-                    name = sym['name']
+                    name = sym["name"]
                     if name not in self.symbol_index:
                         self.symbol_index[name] = []
                     self.symbol_index[name].append({
-                        'file': relative_path,
-                        'line': sym.get('line', sym.get('address', '1')),
-                        'kind': sym.get('kind', 'unknown'),
-                        'scope': sym.get('scope', None),
-                        'path': str(file_path)
+                        "file": relative_path,
+                        "line": sym.get("line", sym.get("address", "1")),
+                        "kind": sym.get("kind", "unknown"),
+                        "scope": sym.get("scope", None),
+                        "path": str(file_path),
                     })
 
         console.print("✓ Parsing complete!")
@@ -213,13 +212,13 @@ class CodeParser:
         output_file = Path(output_path)
 
         data = {
-            'project_path': str(self.project_path),
-            'total_chunks': len(self.chunks),
-            'statistics': dict(self.stats),
-            'chunks': [chunk.to_dict() for chunk in self.chunks]
+            "project_path": str(self.project_path),
+            "total_chunks": len(self.chunks),
+            "statistics": dict(self.stats),
+            "chunks": [chunk.to_dict() for chunk in self.chunks],
         }
 
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with Path(output_file).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         console.print(f"[green]✓ Results saved to: {output_file}[/green]")
@@ -233,7 +232,7 @@ class CodeParser:
 
         stats_table.add_row("Total Chunks", str(len(self.chunks)))
         for key, value in sorted(self.stats.items()):
-            stats_table.add_row(key.replace('_', ' ').title(), str(value))
+            stats_table.add_row(key.replace("_", " ").title(), str(value))
 
         console.print(stats_table)
         console.print()
@@ -266,6 +265,6 @@ class CodeParser:
 
     def save_symbol_index(self, output_path: str = "symbol_index.json"):
         """Save symbol index to JSON (from enhanced.py)"""
-        with open(output_path, "w") as f:
+        with Path(output_path).open("w") as f:
             json.dump(self.symbol_index, f, indent=4)
         console.print(f"[green]✓ Symbol index saved to: {output_path}[/green]")

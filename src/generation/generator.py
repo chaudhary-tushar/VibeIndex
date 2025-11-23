@@ -3,12 +3,12 @@ LLM client and generation utilities
 """
 
 import os
-from typing import List, Any
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_openai import ChatOpenAI
-from langchain_ollama import ChatOllama
+
 from dotenv import load_dotenv
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 # Load environment
 load_dotenv()
@@ -16,6 +16,7 @@ load_dotenv()
 
 class LLMClient:
     """Unified LLM client supporting multiple providers"""
+
     def __init__(self):
         self.provider = os.getenv("LLM_PROVIDER", "ollama")
         self.model = os.getenv("LLM_MODEL", "ai/llama3.2:latest")
@@ -25,10 +26,7 @@ class LLMClient:
 
         if self.provider == "ollama":
             self.llm = ChatOllama(
-                model=self.model,
-                base_url=self.base_url,
-                temperature=self.temperature,
-                num_predict=self.max_tokens
+                model=self.model, base_url=self.base_url, temperature=self.temperature, num_predict=self.max_tokens
             )
         elif self.provider == "openai":
             self.llm = ChatOpenAI(
@@ -36,12 +34,12 @@ class LLMClient:
                 base_url=self.base_url,
                 temperature=self.temperature,
                 openai_api_key=os.getenv("OPENAI_API_KEY"),
-                max_tokens=self.max_tokens
+                max_tokens=self.max_tokens,
             )
         else:
             raise NotImplementedError(f"Provider {self.provider} not supported")
 
-    async def generate_batch(self, prompts: List[str]) -> List[str]:
+    async def generate_batch(self, prompts: list[str]) -> list[str]:
         """Generate responses for a batch of prompts"""
         if not prompts:
             return []

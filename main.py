@@ -1,31 +1,37 @@
-import click
-import uvicorn
-from pathlib import Path
-from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+import asyncio
 import json
 import os
-import asyncio
+from pathlib import Path
 
-# Import our preprocessing modules
-from src.preprocessing import parse_project, parse_file, CodeParser
-from src.preprocessing.chunk import ChunkPreprocessor
-from src.embedding.embedder import EmbeddingGenerator
-from src.embedding.batch_processor import BatchProcessor
-from src.retrieval.search import QdrantIndexer, index_from_embedded_json
-from src.retrieval.hybrid_search import setup_hybrid_collection
-from src.config import EmbeddingConfig, QdrantConfig
-from src.config import EmbeddingConfig, QdrantConfig
-from src.generation.context_builder import ContextEnricher, stats_check, get_summarized_chunks_ids
-from src.generation import BatchProcessor_2
-
+import click
+import uvicorn
+from fastapi import FastAPI
+from fastapi import HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from rich.console import Console
 from rich.markdown import Markdown
+
+from src.config import EmbeddingConfig
+from src.config import QdrantConfig
+from src.embedding.embedder import EmbeddingGenerator
+from src.generation import BatchProcessor_2
+from src.generation.context_builder import ContextEnricher
+from src.generation.context_builder import get_summarized_chunks_ids
+from src.generation.context_builder import stats_check
+
+# Import our preprocessing modules
+from src.preprocessing import parse_file
+from src.preprocessing import parse_project
+from src.preprocessing.chunk import ChunkPreprocessor
 from src.retrieval import CodeRAG_2
+from src.retrieval.hybrid_search import setup_hybrid_collection
+from src.retrieval.search import QdrantIndexer
+from src.retrieval.search import index_from_embedded_json
 
 console = Console()
 app = FastAPI(title="RAG Code Parser API", description="API for parsing code into chunks for RAG indexing")
+
 
 @app.get("/")
 def read_root():
@@ -94,12 +100,13 @@ def read_root():
     """
     return HTMLResponse(content=html_content)
 
+
 @app.post("/parse-project")
 async def api_parse_project(request: dict):
     """Parse an entire project directory"""
     project_path = request.get("project_path", ".")
 
-    if not os.path.exists(project_path):
+    if not Path(project_path).exists():
         raise HTTPException(status_code=404, detail=f"Project path not found: {project_path}")
 
     try:
@@ -112,25 +119,24 @@ async def api_parse_project(request: dict):
             "total_chunks": len(parser.chunks),
             "statistics": dict(parser.stats),
             "chunks": [chunk.to_dict() for chunk in parser.chunks[:100]],  # Limit first 100 chunks
-            "limited": len(parser.chunks) > 100
+            "limited": len(parser.chunks) > 100,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Parsing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Parsing error: {e!s}") from None
+
 
 @app.get("/parse-file")
 async def api_parse_file(file_path: str):
     """Parse a single file"""
-    if not os.path.exists(file_path):
+    if not Path(file_path).exists():
         raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
 
     try:
         chunks = parse_file(file_path)
-        return {
-            "file_path": file_path,
-            "chunks": [chunk.to_dict() for chunk in chunks]
-        }
+        return {"file_path": file_path, "chunks": [chunk.to_dict() for chunk in chunks]}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Parsing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Parsing error: {e!s}") from None
+
 
 @app.post("/preprocess-chunks")
 async def api_preprocess_chunks(request: dict):
@@ -138,12 +144,12 @@ async def api_preprocess_chunks(request: dict):
     input_file = request.get("input_file")
     output_file = request.get("output_file")
 
-    if not input_file or not os.path.exists(input_file):
+    if not input_file or not Path(input_file).exists():
         raise HTTPException(status_code=400, detail="Valid input_file required")
 
     try:
         # Load chunks
-        with open(input_file, "r", encoding="utf-8") as f:
+        with Path(input_file).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -161,21 +167,22 @@ async def api_preprocess_chunks(request: dict):
             "project_path": data.get("project_path", ""),
             "total_chunks": len(processed_chunks),
             "statistics": data.get("statistics", {}),
-            "chunks": processed_chunks
+            "chunks": processed_chunks,
         }
 
         if output_file:
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_file, "w", encoding="utf-8") as f:
+            with Path(output_file).open("w", encoding="utf-8") as f:
                 json.dump(output_data, f, indent=2, ensure_ascii=False)
 
         return {
             "message": f"Preprocessed {len(processed_chunks)} chunks",
             "output_file": output_file,
-            "data": output_data if not output_file else None
+            "data": output_data if not output_file else None,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Preprocessing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Preprocessing error: {e!s}") from None
+
 
 @app.post("/embed-chunks")
 async def api_embed_chunks(request: dict):
@@ -185,12 +192,12 @@ async def api_embed_chunks(request: dict):
     model_url = request.get("model_url", "http://localhost:12434/engines/llama.cpp/v1")
     model_name = request.get("model_name", "ai/embeddinggemma")
 
-    if not input_file or not os.path.exists(input_file):
+    if not input_file or not Path(input_file).exists():
         raise HTTPException(status_code=400, detail="Valid input_file required")
 
     try:
         # Load chunks
-        with open(input_file, "r", encoding="utf-8") as f:
+        with Path(input_file).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -209,21 +216,22 @@ async def api_embed_chunks(request: dict):
             "project_path": data.get("project_path", ""),
             "total_chunks": len(embedded_chunks),
             "statistics": data.get("statistics", {}),
-            "chunks": embedded_chunks
+            "chunks": embedded_chunks,
         }
 
         if output_file:
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_file, "w", encoding="utf-8") as f:
+            with Path(output_file).open("w", encoding="utf-8") as f:
                 json.dump(output_data, f, indent=2, ensure_ascii=False)
 
         return {
             "message": f"Embedded {len(embedded_chunks)} chunks",
             "output_file": output_file,
-            "data": output_data if not output_file else None
+            "data": output_data if not output_file else None,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Embedding error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Embedding error: {e!s}")
+
 
 @app.post("/index-chunks")
 async def api_index_chunks(request: dict):
@@ -233,12 +241,12 @@ async def api_index_chunks(request: dict):
     port = request.get("port", 6333)
     collection_prefix = request.get("collection_prefix", "tipsy")
 
-    if not input_file or not os.path.exists(input_file):
+    if not input_file or not Path(input_file).exists():
         raise HTTPException(status_code=400, detail="Valid input_file required")
 
     try:
         # Load chunks
-        with open(input_file, "r", encoding="utf-8") as f:
+        with Path(input_file).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -261,10 +269,11 @@ async def api_index_chunks(request: dict):
             "message": f"Indexed {len(chunks)} chunks in Qdrant",
             "host": host,
             "port": port,
-            "collections": list(indexer.collections.keys())
+            "collections": list(indexer.collections.keys()),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Indexing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Indexing error: {e!s}")
+
 
 @app.post("/enrich-chunks")
 async def api_enrich_chunks(request: dict):
@@ -273,12 +282,12 @@ async def api_enrich_chunks(request: dict):
     output_file = request.get("output_file")
     symbol_index_file = request.get("symbol_index_file")
 
-    if not input_file or not os.path.exists(input_file):
+    if not input_file or not Path(input_file).exists():
         raise HTTPException(status_code=400, detail="Valid input_file required")
 
     try:
         # Load chunks
-        with open(input_file, "r", encoding="utf-8") as f:
+        with Path(input_file).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -293,8 +302,8 @@ async def api_enrich_chunks(request: dict):
 
         # Load symbol index (optional)
         symbol_index = None
-        if symbol_index_file and os.path.exists(symbol_index_file):
-            with open(symbol_index_file, "r", encoding="utf-8") as f:
+        if symbol_index_file and Path(symbol_index_file).exists():
+            with Path(symbol_index_file).open(encoding="utf-8") as f:
                 symbol_index = json.load(f)
 
         # Enrich
@@ -306,21 +315,22 @@ async def api_enrich_chunks(request: dict):
             "project_path": data.get("project_path", ""),
             "total_chunks": len(enriched_chunks),
             "statistics": data.get("statistics", {}),
-            "chunks": enriched_chunks
+            "chunks": enriched_chunks,
         }
 
         if output_file:
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-            with open(output_file, "w", encoding="utf-8") as f:
+            with Path(output_file).open("w", encoding="utf-8") as f:
                 json.dump(output_data, f, indent=2, ensure_ascii=False)
 
         return {
             "message": f"Enriched {len(enriched_chunks)} chunks",
             "output_file": output_file,
-            "data": output_data if not output_file else None
+            "data": output_data if not output_file else None,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Enrichment error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Enrichment error: {e!s}")
+
 
 @app.post("/batch-prompts")
 async def api_batch_prompts(request: dict):
@@ -331,7 +341,7 @@ async def api_batch_prompts(request: dict):
     delay = request.get("delay", 0.2)
     model = request.get("model")
 
-    if not input_path or not os.path.exists(input_path):
+    if not input_path or not Path(input_path).exists():
         raise HTTPException(status_code=400, detail="Valid input_path required")
 
     try:
@@ -340,13 +350,10 @@ async def api_batch_prompts(request: dict):
         processor = BatchProcessor_2(delay=delay)
         prompts = processor.load_prompts(input_path)
         results = processor.process_prompts(prompts, output_file, output_format)
-        return {
-            "message": f"Processed {len(results)} prompts",
-            "num_prompts": len(prompts),
-            "output_file": output_file
-        }
+        return {"message": f"Processed {len(results)} prompts", "num_prompts": len(prompts), "output_file": output_file}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Batch processing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Batch processing error: {e!s}")
+
 
 @app.post("/api/index-embedded")
 async def api_index_embedded(request: dict):
@@ -360,7 +367,8 @@ async def api_index_embedded(request: dict):
         index_from_embedded_json(path, embedding_dim, collection_prefix)
         return {"status": "success", "message": "Pre-embedded JSON indexed successfully"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Indexing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Indexing error: {e!s}")
+
 
 @app.post("/api/hybrid-setup")
 async def api_hybrid_setup(request: dict):
@@ -373,17 +381,18 @@ async def api_hybrid_setup(request: dict):
         setup_hybrid_collection(collection_name, chunks_path)
         return {"status": "success", "message": "Hybrid collection setup complete"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Hybrid setup error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Hybrid setup error: {e!s}")
+
 
 @click.group()
 def cli():
     """RAG Code Parser CLI"""
-    pass
+
 
 @cli.command()
-@click.option('--path', '-p', default='.', help='Project path to ingest')
-@click.option('--output', '-o', help='Output file for parsed chunks (JSON)')
-@click.option('--verbose', '-v', is_flag=True, help='Verbose output')
+@click.option("--path", "-p", default=".", help="Project path to ingest")
+@click.option("--output", "-o", help="Output file for parsed chunks (JSON)")
+@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 def ingest(path, output, verbose):
     """
     Run the data ingestion pipeline - parse code into chunks.
@@ -406,7 +415,7 @@ def ingest(path, output, verbose):
             # Show summary
             click.echo("\nParsed chunks summary:")
             for i, chunk in enumerate(parser.chunks[:10]):  # Show first 10
-                click.echo(f"  {i+1}. {chunk.name} ({chunk.type}) - {chunk.file_path}")
+                click.echo(f"  {i + 1}. {chunk.name} ({chunk.type}) - {chunk.file_path}")
             if len(parser.chunks) > 10:
                 click.echo(f"  ... and {len(parser.chunks) - 10} more")
 
@@ -416,10 +425,11 @@ def ingest(path, output, verbose):
         click.echo(f"❌ Error during parsing: {e}", err=True)
         return 1
 
+
 @cli.command()
-@click.option('--input', '-i', required=True, help='Input JSON file with chunks')
-@click.option('--output', '-o', help='Output file for preprocessed chunks (JSON)')
-@click.option('--verbose', '-v', is_flag=True, help='Verbose output')
+@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
+@click.option("--output", "-o", help="Output file for preprocessed chunks (JSON)")
+@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 def preprocess(input, output, verbose):
     """
     Preprocess code chunks (deduplication, enhancement).
@@ -428,7 +438,7 @@ def preprocess(input, output, verbose):
 
     try:
         # Load chunks
-        with open(input, "r", encoding="utf-8") as f:
+        with Path(input).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -451,10 +461,10 @@ def preprocess(input, output, verbose):
                 "project_path": data.get("project_path", ""),
                 "total_chunks": len(processed_chunks),
                 "statistics": data.get("statistics", {}),
-                "chunks": processed_chunks
+                "chunks": processed_chunks,
             }
             Path(output).parent.mkdir(parents=True, exist_ok=True)
-            with open(output, "w", encoding="utf-8") as f:
+            with Path(output).open("w", encoding="utf-8") as f:
                 json.dump(output_data, f, indent=2, ensure_ascii=False)
             click.echo(f"Results saved to: {output}")
         else:
@@ -469,12 +479,13 @@ def preprocess(input, output, verbose):
         click.echo(f"❌ Error during preprocessing: {e}", err=True)
         return 1
 
+
 @cli.command()
-@click.option('--input', '-i', required=True, help='Input JSON file with chunks')
-@click.option('--output', '-o', help='Output file for embedded chunks (JSON)')
-@click.option('--model-url', default="http://localhost:12434/engines/llama.cpp/v1", help='Embedding model URL')
-@click.option('--model-name', default="ai/embeddinggemma", help='Embedding model name')
-@click.option('--verbose', '-v', is_flag=True, help='Verbose output')
+@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
+@click.option("--output", "-o", help="Output file for embedded chunks (JSON)")
+@click.option("--model-url", default="http://localhost:12434/engines/llama.cpp/v1", help="Embedding model URL")
+@click.option("--model-name", default="ai/embeddinggemma", help="Embedding model name")
+@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 def embed(input, output, model_url, model_name, verbose):
     """
     Generate embeddings for code chunks.
@@ -484,7 +495,7 @@ def embed(input, output, model_url, model_name, verbose):
 
     try:
         # Load chunks
-        with open(input, "r", encoding="utf-8") as f:
+        with Path(input).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -508,10 +519,10 @@ def embed(input, output, model_url, model_name, verbose):
                 "project_path": data.get("project_path", ""),
                 "total_chunks": len(embedded_chunks),
                 "statistics": data.get("statistics", {}),
-                "chunks": embedded_chunks
+                "chunks": embedded_chunks,
             }
             Path(output).parent.mkdir(parents=True, exist_ok=True)
-            with open(output, "w", encoding="utf-8") as f:
+            with Path(output).open("w", encoding="utf-8") as f:
                 json.dump(output_data, f, indent=2, ensure_ascii=False)
             click.echo(f"Results saved to: {output}")
         else:
@@ -525,12 +536,13 @@ def embed(input, output, model_url, model_name, verbose):
         click.echo(f"❌ Error during embedding: {e}", err=True)
         return 1
 
+
 @cli.command()
-@click.option('--input', '-i', required=True, help='Input JSON file with embedded chunks')
-@click.option('--host', default="localhost", help='Qdrant host')
-@click.option('--port', default=6333, type=int, help='Qdrant port')
-@click.option('--collection-prefix', default="tipsy", help='Collection prefix')
-@click.option('--verbose', '-v', is_flag=True, help='Verbose output')
+@click.option("--input", "-i", required=True, help="Input JSON file with embedded chunks")
+@click.option("--host", default="localhost", help="Qdrant host")
+@click.option("--port", default=6333, type=int, help="Qdrant port")
+@click.option("--collection-prefix", default="tipsy", help="Collection prefix")
+@click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 def index(input, host, port, collection_prefix, verbose):
     """
     Index embedded chunks in Qdrant vector database.
@@ -540,7 +552,7 @@ def index(input, host, port, collection_prefix, verbose):
 
     try:
         # Load chunks
-        with open(input, "r", encoding="utf-8") as f:
+        with Path(input).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -568,10 +580,11 @@ def index(input, host, port, collection_prefix, verbose):
         click.echo(f"❌ Error during indexing: {e}", err=True)
         return 1
 
+
 @cli.command()
-@click.option('--path', '-p', required=True, help='Path to pre-embedded JSON file')
-@click.option('--embedding-dim', '-d', default=768, type=int, help='Embedding dimension')
-@click.option('--collection-prefix', '-c', default='default', help='Collection prefix')
+@click.option("--path", "-p", required=True, help="Path to pre-embedded JSON file")
+@click.option("--embedding-dim", "-d", default=768, type=int, help="Embedding dimension")
+@click.option("--collection-prefix", "-c", default="default", help="Collection prefix")
 def index_embedded(path, embedding_dim, collection_prefix):
     console.print(f"[bold blue]Indexing pre-embedded JSON from:[/bold blue] {path}")
     console.print(f"Embedding dim: {embedding_dim}, Prefix: {collection_prefix}")
@@ -582,9 +595,10 @@ def index_embedded(path, embedding_dim, collection_prefix):
         console.print(f"[bold red]❌ Error: {e}[/bold red]")
         return 1
 
+
 @cli.command()
-@click.option('--collection-name', '-n', required=True, help='Name of the hybrid collection')
-@click.option('--chunks-path', '-p', required=True, help='Path to chunks JSON file')
+@click.option("--collection-name", "-n", required=True, help="Name of the hybrid collection")
+@click.option("--chunks-path", "-p", required=True, help="Path to chunks JSON file")
 def hybrid_setup(collection_name, chunks_path):
     console.print(f"[bold blue]Setting up hybrid collection:[/bold blue] {collection_name}")
     console.print(f"Using chunks: {chunks_path}")
@@ -595,11 +609,12 @@ def hybrid_setup(collection_name, chunks_path):
         console.print(f"[bold red]❌ Error: {e}[/bold red]")
         return 1
 
+
 @cli.command()
-@click.option('--input', '-i', required=True, help='Input JSON file with chunks')
-@click.option('--output', '-o', required=True, help='Output enriched JSON file')
-@click.option('--symbol-index', '-s', help='Optional symbol index JSON file')
-@click.option('--model', '-m', default="ai/llama3.2:latest", help='LLM model to use')
+@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
+@click.option("--output", "-o", required=True, help="Output enriched JSON file")
+@click.option("--symbol-index", "-s", help="Optional symbol index JSON file")
+@click.option("--model", "-m", default="ai/llama3.2:latest", help="LLM model to use")
 def enrich(input, output, symbol_index, model):
     """
     Enrich code chunks with AI-generated context summaries.
@@ -608,7 +623,7 @@ def enrich(input, output, symbol_index, model):
 
     try:
         # Load chunks
-        with open(input, "r", encoding="utf-8") as f:
+        with Path(input).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -623,8 +638,8 @@ def enrich(input, output, symbol_index, model):
 
         # Load symbol index (optional)
         symbol_index_data = None
-        if symbol_index and os.path.exists(symbol_index):
-            with open(symbol_index, "r", encoding="utf-8") as f:
+        if symbol_index and Path(symbol_index).exists():
+            with Path(symbol_index).open(encoding="utf-8") as f:
                 symbol_index_data = json.load(f)
 
         # Set model if provided
@@ -640,11 +655,11 @@ def enrich(input, output, symbol_index, model):
             "project_path": data.get("project_path", ""),
             "total_chunks": len(enriched_chunks),
             "statistics": data.get("statistics", {}),
-            "chunks": enriched_chunks
+            "chunks": enriched_chunks,
         }
 
         Path(output).parent.mkdir(parents=True, exist_ok=True)
-        with open(output, "w", encoding="utf-8") as f:
+        with Path(output).open("w", encoding="utf-8") as f:
             json.dump(output_data, f, indent=2, ensure_ascii=False)
 
         click.echo(f"✅ Enriched {len(enriched_chunks)} chunks. Saved to {output}")
@@ -653,12 +668,15 @@ def enrich(input, output, symbol_index, model):
         click.echo(f"❌ Error during enrichment: {e}", err=True)
         return 1
 
+
 @cli.command()
-@click.option('--input', '-i', required=True, help='Input .txt file or directory of .txt files with prompts (one per line)')
-@click.option('--output', '-o', help='Output file (jsonl/json/csv)')
-@click.option('--fmt', '-f', default='jsonl', type=click.Choice(['jsonl', 'json', 'csv']), help='Output format')
-@click.option('--delay', default=0.2, type=float, help='Delay (seconds) between requests')
-@click.option('--model', '-m', help='Override LLM model name')
+@click.option(
+    "--input", "-i", required=True, help="Input .txt file or directory of .txt files with prompts (one per line)"
+)
+@click.option("--output", "-o", help="Output file (jsonl/json/csv)")
+@click.option("--fmt", "-f", default="jsonl", type=click.Choice(["jsonl", "json", "csv"]), help="Output format")
+@click.option("--delay", default=0.2, type=float, help="Delay (seconds) between requests")
+@click.option("--model", "-m", help="Override LLM model name")
 def batch(input_path, output, fmt, delay, model):
     """
     Batch process prompts through LLM.
@@ -671,10 +689,11 @@ def batch(input_path, output, fmt, delay, model):
     processor.process_prompts(prompts, output, fmt)
     click.echo("\n✅ Batch processing complete!")
 
+
 @cli.command()
-@click.option('--host', default='0.0.0.0', help='Host to bind to')
-@click.option('--port', default=8000, type=int, help='Port to bind to')
-@click.option('--reload', is_flag=True, help='Enable auto-reload for development')
+@click.option("--host", default="0.0.0.0", help="Host to bind to")
+@click.option("--port", default=8000, type=int, help="Port to bind to")
+@click.option("--reload", is_flag=True, help="Enable auto-reload for development")
 def api(host, port, reload):
     """
     Run the FastAPI server for code parsing.
@@ -682,46 +701,32 @@ def api(host, port, reload):
     click.echo(f"Starting RAG Code Parser API on {host}:{port}")
 
     # Mount static files if they exist
-    if os.path.exists('static'):
+    if Path("static").exists():
         app.mount("/static", StaticFiles(directory="static"), name="static")
-    uvicorn.run(
-        "main:app",
-        host=host,
-        port=port,
-        reload=reload,
-        log_level="info"
-    )
+    uvicorn.run("main:app", host=host, port=port, reload=reload, log_level="info")
+
 
 @cli.command()
-@click.option('--qdrant-host', default='localhost', help='Qdrant host')
-@click.option('--qdrant-port', default=6333, type=int, help='Qdrant port')
-@click.option('--collection-prefix', default='tipsy', help='Collection prefix')
-@click.option('--llm-url', default='http://localhost:12434/', help='LLM API URL')
-@click.option('--llm-model', default='ai/llama3.2:latest', help='LLM model')
-@click.option('--embedding-model', default='ai/embeddinggemma', help='Embedding model')
+@click.option("--qdrant-host", default="localhost", help="Qdrant host")
+@click.option("--qdrant-port", default=6333, type=int, help="Qdrant port")
+@click.option("--collection-prefix", default="tipsy", help="Collection prefix")
+@click.option("--llm-url", default="http://localhost:12434/", help="LLM API URL")
+@click.option("--llm-model", default="ai/llama3.2:latest", help="LLM model")
+@click.option("--embedding-model", default="ai/embeddinggemma", help="Embedding model")
 def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embedding_model):
     """
     Interactive RAG query CLI using CodeRAG_2
     """
-    from src.config import EmbeddingConfig, QdrantConfig
+    from src.config import EmbeddingConfig
+    from src.config import QdrantConfig
 
     embedding_config = EmbeddingConfig(
-        model_url=f"{llm_url}engines/llama.cpp/v1",
-        model_name=embedding_model,
-        embedding_dim=768,
-        batch_size=32
+        model_url=f"{llm_url}engines/llama.cpp/v1", model_name=embedding_model, embedding_dim=768, batch_size=32
     )
-    qdrant_config = QdrantConfig(
-        host=qdrant_host,
-        port=qdrant_port,
-        collection_prefix=collection_prefix
-    )
+    qdrant_config = QdrantConfig(host=qdrant_host, port=qdrant_port, collection_prefix=collection_prefix)
 
     rag_system = CodeRAG_2(
-        embedding_config=embedding_config,
-        qdrant_config=qdrant_config,
-        llm_api_url=llm_url,
-        llm_model_name=llm_model
+        embedding_config=embedding_config, qdrant_config=qdrant_config, llm_api_url=llm_url, llm_model_name=llm_model
     )
 
     console.print("[bold green]CodeRAG_2 Interactive CLI Ready![/bold green]")
@@ -745,30 +750,31 @@ def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embeddi
 
 
 @cli.command()
-@click.option('--qdrant-host', default='localhost', help='Qdrant host')
-@click.option('--qdrant-port', default=6333, type=int, help='Qdrant port')
-@click.option('--collection-name', default='default', help='Collection name to search in')
-@click.option('--embedding-model', default='ai/embeddinggemma', help='Embedding model')
+@click.option("--qdrant-host", default="localhost", help="Qdrant host")
+@click.option("--qdrant-port", default=6333, type=int, help="Qdrant port")
+@click.option("--collection-name", default="default", help="Collection name to search in")
+@click.option("--embedding-model", default="ai/embeddinggemma", help="Embedding model")
 def advanced_rag(qdrant_host, qdrant_port, collection_name, embedding_model):
     """
     Advanced RAG query CLI following rag2.mermaid architecture with reranking
     """
-    from src.config import EmbeddingConfig, QdrantConfig
-    from src.retrieval.hybrid_search import HybridSearchEngine, HybridSearchConfig
-    from src.retrieval.complete_retrieval_system import CompleteRetrievalSystem
     from qdrant_client import QdrantClient
+
+    from src.config import EmbeddingConfig
+    from src.config import QdrantConfig
+    from src.retrieval.complete_retrieval_system import CompleteRetrievalSystem
+    from src.retrieval.hybrid_search import HybridSearchConfig
+    from src.retrieval.hybrid_search import HybridSearchEngine
 
     # Setup configurations
     embedding_config = EmbeddingConfig(
         model_url="http://localhost:12434/engines/llama.cpp/v1",
         model_name=embedding_model,
         embedding_dim=768,
-        batch_size=32
+        batch_size=32,
     )
-    qdrant_config = QdrantConfig(
-        host=qdrant_host,
-        port=qdrant_port,
-        collection_prefix=""
+    qdrant_config = QdrantConfig(  # noqa: F841
+        host=qdrant_host, port=qdrant_port, collection_prefix=""
     )
 
     # Initialize components
@@ -777,15 +783,12 @@ def advanced_rag(qdrant_host, qdrant_port, collection_name, embedding_model):
 
     hybrid_search_config = HybridSearchConfig()
     hybrid_search_engine = HybridSearchEngine(
-        qdrant_client=qdrant_client,
-        embedding_generator=embedding_generator,
-        config=hybrid_search_config
+        qdrant_client=qdrant_client, embedding_generator=embedding_generator, config=hybrid_search_config
     )
 
     # Create the complete retrieval system following rag2.mermaid architecture
     retrieval_system = CompleteRetrievalSystem(
-        hybrid_search_engine=hybrid_search_engine,
-        embedding_generator=embedding_generator
+        hybrid_search_engine=hybrid_search_engine, embedding_generator=embedding_generator
     )
 
     console.print("[bold blue]Advanced RAG (rag2.mermaid) Interactive CLI Ready![/bold blue]")
@@ -798,11 +801,7 @@ def advanced_rag(qdrant_host, qdrant_port, collection_name, embedding_model):
                 break
 
             console.print("[cyan]🔍 Retrieving with advanced rag2.mermaid pipeline...[/cyan]")
-            results = retrieval_system.retrieve(
-                query=query,
-                collection_name=collection_name,
-                top_k=5
-            )
+            results = retrieval_system.retrieve(query=query, collection_name=collection_name, top_k=5)
 
             console.print(f"\n[bold green]Found {len(results)} relevant code snippets:[/bold green]")
             for i, result in enumerate(results, 1):
@@ -818,5 +817,5 @@ def advanced_rag(qdrant_host, qdrant_port, collection_name, embedding_model):
             console.print(f"[red]Error: {e}[/red]")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     cli()

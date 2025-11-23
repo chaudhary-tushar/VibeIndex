@@ -2,16 +2,15 @@
 Context enrichment and building utilities
 """
 
-import asyncio
-import json
-import os
 import sqlite3
-from pathlib import Path
-from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Any
 
 from .generator import LLMClient
-from .prompt_constructor import ContextPromptBuilder, SymbolIndex, MultiLanguageContextPrompt, DjangoCodeContextPrompt
+from .prompt_constructor import ContextPromptBuilder
+from .prompt_constructor import MultiLanguageContextPrompt
+from .prompt_constructor import SymbolIndex
 
 
 def update_summary(record_id: str, summary: str):
@@ -21,10 +20,7 @@ def update_summary(record_id: str, summary: str):
     try:
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
-        cur.execute(
-            f"UPDATE {table_name} SET summary = ? WHERE id = ?",
-            (summary, record_id)
-        )
+        cur.execute(f"UPDATE {table_name} SET summary = ? WHERE id = ?", (summary, record_id))
         conn.commit()
         conn.close()
     except Exception as e:
@@ -36,10 +32,10 @@ class ContextEnricher:
 
     def __init__(
         self,
-        chunks: List[Dict[str, Any]],
-        symbol_index: Optional[Dict[str, Any]] = None,
-        prompt_builder: Optional[ContextPromptBuilder] = None,
-        llm_client: Optional[LLMClient] = None
+        chunks: list[dict[str, Any]],
+        symbol_index: dict[str, Any] | None = None,
+        prompt_builder: ContextPromptBuilder | None = None,
+        llm_client: LLMClient | None = None,
     ):
         self.chunks = chunks
         self.symbol_index = SymbolIndex(symbol_index) if symbol_index else None
@@ -47,28 +43,28 @@ class ContextEnricher:
         self.llm_client = llm_client or LLMClient()
         self.executor = ThreadPoolExecutor(max_workers=4)
 
-    def _normalize_chunk(self, chunk_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_chunk(self, chunk_data: dict[str, Any]) -> dict[str, Any]:
         """Normalize chunk data to handle both old and new formats"""
         # Ensure context is a dict (handle string context from old format)
-        if isinstance(chunk_data.get('context'), str):
-            chunk_data['context'] = {'summary': chunk_data['context']}
+        if isinstance(chunk_data.get("context"), str):
+            chunk_data["context"] = {"summary": chunk_data["context"]}
 
         # Ensure all required fields have defaults
-        chunk_data.setdefault('location', {})
-        chunk_data.setdefault('metadata', {})
-        chunk_data.setdefault('documentation', {})
-        chunk_data.setdefault('analysis', {})
-        chunk_data.setdefault('relationships', {})
-        chunk_data.setdefault('references', [])
-        chunk_data.setdefault('defines', [])
+        chunk_data.setdefault("location", {})
+        chunk_data.setdefault("metadata", {})
+        chunk_data.setdefault("documentation", {})
+        chunk_data.setdefault("analysis", {})
+        chunk_data.setdefault("relationships", {})
+        chunk_data.setdefault("references", [])
+        chunk_data.setdefault("defines", [])
 
         # Handle qualified_name fallback
-        if 'qualified_name' not in chunk_data:
-            chunk_data['qualified_name'] = chunk_data.get('name', '')
+        if "qualified_name" not in chunk_data:
+            chunk_data["qualified_name"] = chunk_data.get("name", "")
 
         return chunk_data
 
-    async def enrich(self, batch_size: int = 4) -> List[Dict[str, Any]]:
+    async def enrich(self, batch_size: int = 4) -> list[dict[str, Any]]:
         """Enrich chunks with AI-generated summaries in batches"""
         enriched = []
         total_chunks = len(self.chunks)
@@ -89,7 +85,9 @@ class ContextEnricher:
         batch_chunks = []
 
         for i, chunk in enumerate(filtered_chunks, 1):
-            print(f"[{i}/{len(filtered_chunks)}] Preparing context for {chunk.get('type', 'unknown')} '{chunk.get('name', 'unknown')}' (ID: {chunk.get('id')})...")
+            print(
+                f"[{i}/{len(filtered_chunks)}] Preparing context for {chunk.get('type', 'unknown')} '{chunk.get('name', 'unknown')}' (ID: {chunk.get('id')})..."
+            )
 
             # Build prompt
             prompt = self.prompt_builder.build_prompt(chunk, self.symbol_index)
@@ -104,9 +102,7 @@ class ContextEnricher:
 
                 # Assign summaries back
                 for chunk_obj, summary in zip(batch_chunks, summaries):
-                    enriched.append(
-                        self._process_chunk(chunk_obj, summary)
-                    )
+                    enriched.append(self._process_chunk(chunk_obj, summary))
                 # Reset batch
                 batch_prompts = []
                 batch_chunks = []
@@ -115,25 +111,23 @@ class ContextEnricher:
         if batch_prompts:
             summaries = await self.llm_client.generate_batch(batch_prompts)
             for chunk_obj, summary in zip(batch_chunks, summaries):
-                enriched.append(
-                    self._process_chunk(chunk_obj, summary)
-                )
+                enriched.append(self._process_chunk(chunk_obj, summary))
 
         print("✅ Finished enrichment with batching.")
         return enriched
 
-    def _process_chunk(self, chunk: Dict[str, Any], summary: str) -> Dict[str, Any]:
+    def _process_chunk(self, chunk: dict[str, Any], summary: str) -> dict[str, Any]:
         """Process a chunk with its generated summary"""
         chunk_dict = chunk.copy()
         chunk_dict["context"]["summary"] = summary
 
         # Async DB update via thread pool
-        self.executor.submit(update_summary, chunk.get('id'), summary)
+        self.executor.submit(update_summary, chunk.get("id"), summary)
 
         return chunk_dict
 
 
-def get_summarized_chunks_ids() -> List[str]:
+def get_summarized_chunks_ids() -> list[str]:
     """Get IDs of chunks that already have summaries"""
     db_path = Path("enhanced_chunks.db")
     table_name = "enhanced_code_chunks"

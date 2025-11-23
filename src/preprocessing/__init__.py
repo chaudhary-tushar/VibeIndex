@@ -2,21 +2,15 @@
 Preprocessing module for RAG indexing pipeline
 """
 
-from .parser import CodeParser
 from .analyzer import Analyzer
-from .metadata_extractor import MetadataExtractor
-from .dependency_mapper import DependencyMapper
 from .chunk import CodeChunk
+from .dependency_mapper import DependencyMapper
 from .language_config import LanguageConfig
+from .metadata_extractor import MetadataExtractor
+from .parser import CodeParser
 
-__all__ = [
-    'CodeParser',
-    'Analyzer',
-    'MetadataExtractor',
-    'DependencyMapper',
-    'CodeChunk',
-    'LanguageConfig'
-]
+__all__ = ["Analyzer", "CodeChunk", "CodeParser", "DependencyMapper", "LanguageConfig", "MetadataExtractor"]
+
 
 # Convenience function for quick parsing
 def parse_project(project_path: str) -> CodeParser:
@@ -32,6 +26,7 @@ def parse_project(project_path: str) -> CodeParser:
     parser = CodeParser(project_path)
     parser.parse_project()
     return parser
+
 
 def parse_file(file_path: str, project_path: str = None) -> list[CodeChunk]:
     """
@@ -52,18 +47,13 @@ def parse_file(file_path: str, project_path: str = None) -> list[CodeChunk]:
     parser = CodeParser(project_path)
     return parser.parse_file(Path(file_path))
 
+
 """
 Preprocessing module exports - Enhanced with advanced ChunkPreprocessor
 """
 
-from .chunk import (
-    CodeChunk,
-    ChunkPreprocessor,  # Enhanced version
-    ChunkPreprocessor_2  # Original version for backward compatibility
-)
+from .chunk import ChunkPreprocessor  # Enhanced version
+from .chunk import ChunkPreprocessor_2  # Original version for backward compatibility
+from .chunk import CodeChunk
 
-__all__ = [
-    'CodeChunk',
-    'ChunkPreprocessor',
-    'ChunkPreprocessor_2'
-]
+__all__ = ["ChunkPreprocessor", "ChunkPreprocessor_2", "CodeChunk"]

@@ -15,7 +15,7 @@ tokenized_output = tokenizer(input_string)
 # 4. Calculate the token count
 # The 'input_ids' tensor holds the numerical representation of the tokens.
 # The shape[1] gives the length of the sequence (number of tokens).
-token_count = tokenized_output['input_ids']
+token_count = tokenized_output["input_ids"]
 
 # Display results
 print(f"Model: {model_name}")
