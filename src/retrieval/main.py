@@ -1,15 +1,14 @@
+import os
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
-from qdrant_client.http import models
 from sentence_transformers import SentenceTransformer
-from typing import List, Dict, Any
-import os
 
 app = FastAPI()
 
 # Initialize the embedding model
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # Initialize Qdrant client
 qdrant_client = QdrantClient(

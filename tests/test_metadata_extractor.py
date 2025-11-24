@@ -1,6 +1,7 @@
 import pytest
-from src.preprocessing.metadata_extractor import MetadataExtractor
+
 from src.preprocessing.chunk import CodeChunk
+from src.preprocessing.metadata_extractor import MetadataExtractor
 
 
 @pytest.fixture
@@ -23,7 +24,6 @@ def test_extract_docstring_python_function(metadata_extractor):
 
     # Since the extract_docstring method expects a Tree-sitter node, we'll test its
     # functionality via the enhance_chunk_metadata method that uses it
-    pass
 
 
 def test_extract_signature_simple_function(metadata_extractor):
@@ -251,7 +251,7 @@ def test_enhance_chunk_metadata_basic(metadata_extractor):
     chunk = CodeChunk(
         type="function",
         name="test_function",
-        code="def test_function():\n    \"\"\"A test function.\"\"\"\n    pass",
+        code='def test_function():\n    """A test function."""\n    pass',
         file_path="test.py",
         language="python",
         start_line=1,
@@ -261,11 +261,11 @@ def test_enhance_chunk_metadata_basic(metadata_extractor):
     enhanced_chunk = metadata_extractor.enhance_chunk_metadata(chunk)
 
     # Should have tags assigned
-    assert hasattr(enhanced_chunk, 'tags')
+    assert hasattr(enhanced_chunk, "tags")
     assert len(enhanced_chunk.tags) > 0
 
     # Should have metadata assigned
-    assert hasattr(enhanced_chunk, 'metadata')
+    assert hasattr(enhanced_chunk, "metadata")
     assert enhanced_chunk.metadata is not None
 
 
@@ -309,13 +309,13 @@ def test_enhance_chunk_metadata_no_tags(metadata_extractor):
     )
 
     # Explicitly remove tags if they exist
-    if hasattr(chunk, 'tags'):
-        delattr(chunk, 'tags')
+    if hasattr(chunk, "tags"):
+        delattr(chunk, "tags")
 
     enhanced_chunk = metadata_extractor.enhance_chunk_metadata(chunk)
 
     # Should have tags assigned now
-    assert hasattr(enhanced_chunk, 'tags')
+    assert hasattr(enhanced_chunk, "tags")
     assert len(enhanced_chunk.tags) > 0
     assert "language:python" in enhanced_chunk.tags
     assert "type:class" in enhanced_chunk.tags

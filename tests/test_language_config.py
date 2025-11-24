@@ -1,4 +1,5 @@
 import pytest
+
 from src.preprocessing.language_config import LanguageConfig
 
 

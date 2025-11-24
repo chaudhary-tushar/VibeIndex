@@ -42,7 +42,7 @@ class CodeParser:
         patterns = LanguageConfig.DEFAULT_IGNORE_PATTERNS.copy()
 
         if gitignore_path.exists():
-            with Path(gitignore_path).open() as f:
+            with Path(gitignore_path).open(encoding="utf-8") as f:
                 patterns.extend(line.strip() for line in f if line.strip() and not line.startswith("#"))
 
         return PathSpec.from_lines(GitWildMatchPattern, patterns)

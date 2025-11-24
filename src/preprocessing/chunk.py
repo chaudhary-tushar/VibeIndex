@@ -49,16 +49,8 @@ class CodeChunk:
     relationships: dict[str, Any] | None = None  # Relationship info (imports, children, etc.)
     context: dict[str, Any] | None = None  # Context metadata (module, project, domain, hierarchy)
 
-    def __post_init__(self):
-        if self.dependencies is None:
-            self.dependencies = []
-        if self.references is None:
-            self.references = []
-        if self.defines is None:
-            self.defines = []
-        if not self.id:
-            hash_input = f"{self.file_path}:{self.qualified_name or self.name}:{self.start_line}"
-            self.id = hashlib.md5(hash_input.encode()).hexdigest()[:12]
+    def _init_optional_fields(self):
+        """Initialize optional fields with defaults"""
         if self.location is None:
             self.location = {}
         if self.context is None:
@@ -72,14 +64,31 @@ class CodeChunk:
         if self.relationships is None:
             self.relationships = {}
 
-        # Generate qualified name if not provided (from enhanced.py)
+    def __post_init__(self):
+        # Initialize lists
+        if self.dependencies is None:
+            self.dependencies = []
+        if self.references is None:
+            self.references = []
+        if self.defines is None:
+            self.defines = []
+
+        # Generate ID if not provided
+        if not self.id:
+            hash_input = f"{self.file_path}:{self.qualified_name or self.name}:{self.start_line}"
+            self.id = hashlib.md5(hash_input.encode()).hexdigest()[:12]
+
+        # Initialize optional fields
+        self._init_optional_fields()
+
+        # Generate qualified name if not provided
         if not self.qualified_name:
             self.qualified_name = self._generate_qualified_name()
 
     def _generate_qualified_name(self) -> str:
         """Generate fully qualified name (migrated from enhanced.py)"""
         file_stem = Path(self.file_path).stem
-        if self.type in ["class", "function", "method"]:
+        if self.type in {"class", "function", "method"}:
             return f"{file_stem}.{self.name}"
         return self.name
 
@@ -90,9 +99,6 @@ class CodeChunk:
 
 class ChunkPreprocessor:
     """Enhanced preprocessing for code chunks before embedding - Merged from mature implementation"""
-
-    # Import consolidated configuration for backward compatibility
-    from ..config import EmbeddingConfig
 
     def __init__(self):
         self.dedup_hashes = set()
@@ -209,8 +215,8 @@ class ChunkPreprocessor:
         return enhanced_chunks
 
 
-# Preserve original ChunkPreprocessor with "_2" suffix for backward compatibility
-class ChunkPreprocessor_2:
+# Preserve original ChunkPreprocessor with "2" suffix for backward compatibility
+class ChunkPreprocessor2:
     """Original ChunkPreprocessor implementation (preserved for compatibility)"""
 
     def __init__(self):

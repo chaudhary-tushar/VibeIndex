@@ -1,7 +1,11 @@
-import pytest
 import tempfile
 from pathlib import Path
-from src.preprocessing import parse_project, parse_file, CodeParser
+
+import pytest
+
+from src.preprocessing import CodeParser
+from src.preprocessing import parse_file
+from src.preprocessing import parse_project
 
 
 def test_parse_project_function():
@@ -14,7 +18,7 @@ def test_parse_project_function():
 
         # Create a simple Python file in the project directory
         test_file = project_path / "test.py"
-        test_file.write_text('def hello(): pass')
+        test_file.write_text("def hello(): pass")
 
         # Call parse_project
         parser = parse_project(str(project_path))
@@ -32,9 +36,9 @@ def test_parse_project_with_multiple_files():
         project_path.mkdir(parents=True)
 
         # Create multiple files
-        (project_path / "main.py").write_text('def main(): pass')
-        (project_path / "utils.py").write_text('def helper(): pass')
-        (project_path / "app.js").write_text('function app() {}')
+        (project_path / "main.py").write_text("def main(): pass")
+        (project_path / "utils.py").write_text("def helper(): pass")
+        (project_path / "app.js").write_text("function app() {}")
 
         # Call parse_project
         parser = parse_project(str(project_path))
@@ -74,7 +78,7 @@ def test_parse_file_with_project_path():
         subdir = project_path / "subdir"
         subdir.mkdir()
         test_file = subdir / "test.py"
-        test_file.write_text('def hello(): pass')
+        test_file.write_text("def hello(): pass")
 
         # Call parse_file with explicit project path
         chunks = parse_file(str(test_file), project_path=str(project_path))
@@ -92,7 +96,7 @@ def test_parse_file_automatic_project_path():
 
         # Create a file
         test_file = project_path / "test.py"
-        test_file.write_text('def hello(): pass')
+        test_file.write_text("def hello(): pass")
 
         # Call parse_file without project path (should use parent directory)
         chunks = parse_file(str(test_file))
@@ -120,7 +124,7 @@ def test_parse_file_wrong_extension():
 
         # Create a file with unsupported extension
         unsupported_file = project_path / "test.xyz"
-        unsupported_file.write_text('some content')
+        unsupported_file.write_text("some content")
 
         # Call parse_file - should return empty list for unsupported extension
         chunks = parse_file(str(unsupported_file))
@@ -152,7 +156,7 @@ def test_parse_project_with_ignore_patterns():
         project_path.mkdir(parents=True)
 
         # Create a Python file
-        (project_path / "main.py").write_text('def main(): pass')
+        (project_path / "main.py").write_text("def main(): pass")
 
         # Create a node_modules directory with a JS file (should be ignored)
         node_modules_dir = project_path / "node_modules"
@@ -176,7 +180,7 @@ def test_consistency_between_functions():
 
         # Create a Python file
         test_file = project_path / "test.py"
-        test_file.write_text('def hello(): pass')
+        test_file.write_text("def hello(): pass")
 
         # Use parse_project to get a parser
         project_parser = parse_project(str(project_path))

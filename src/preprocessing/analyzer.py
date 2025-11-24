@@ -94,7 +94,7 @@ class Analyzer:
                         signature=code.split("\n")[0],
                         complexity=self._calculate_complexity(code),
                         dependencies=self._extract_dependencies(code, language),
-                        parent=parent_name, # Parent will be set by the recursive call
+                        parent=parent_name,  # Parent will be set by the recursive call
                         defines=[name],
                         references=called_symbols,
                     )
@@ -250,7 +250,7 @@ class Analyzer:
             return []
 
         relative_path = str(file_path.relative_to(file_path.parents[3]))  # Go up to project root
-        chunks = []
+        # chunks = []
 
         class FunctionVisitor(cst.CSTVisitor):
             METADATA_DEPENDENCIES = (PositionProvider,)
@@ -372,7 +372,7 @@ class Analyzer:
         keywords = ["if", "elif", "else", "for", "while", "and", "or", "catch", "case"]
         for keyword in keywords:
             # Use regex to find whole word matches
-            complexity += len(re.findall(r'\b' + re.escape(keyword) + r'\b', code))
+            complexity += len(re.findall(r"\b" + re.escape(keyword) + r"\b", code))
         return complexity
 
     def _extract_dependencies(self, code: str, language: str) -> list[str]:
@@ -445,7 +445,7 @@ class Analyzer:
             chunk.location = {
                 "start_line": chunk.start_line,
                 "end_line": chunk.end_line,
-                "start_column": 0, # Default to 0 if not available
+                "start_column": 0,  # Default to 0 if not available
                 "end_column": 0,   # Default to 0 if not available
             }
             return
@@ -459,6 +459,7 @@ class Analyzer:
             "start_column": start_col + 1,
             "end_column": end_col + 1,
         }
+
     def add_code_metadata(self, chunk: CodeChunk, node=None, code_bytes: bytes = None) -> None:
         """Extract code-specific metadata (from enhanced.py)"""
         metadata = {}

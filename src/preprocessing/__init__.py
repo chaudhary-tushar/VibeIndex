@@ -2,7 +2,11 @@
 Preprocessing module for RAG indexing pipeline
 """
 
+from pathlib import Path
+
 from .analyzer import Analyzer
+from .chunk import ChunkPreprocessor  # Enhanced version
+from .chunk import ChunkPreprocessor2  # Original version for backward compatibility
 from .chunk import CodeChunk
 from .dependency_mapper import DependencyMapper
 from .language_config import LanguageConfig
@@ -28,7 +32,7 @@ def parse_project(project_path: str) -> CodeParser:
     return parser
 
 
-def parse_file(file_path: str, project_path: str = None) -> list[CodeChunk]:
+def parse_file(file_path: str, project_path: str | None = None) -> list[CodeChunk]:
     """
     Parse a single file and return its chunks.
 
@@ -39,7 +43,6 @@ def parse_file(file_path: str, project_path: str = None) -> list[CodeChunk]:
     Returns:
         List of CodeChunk objects
     """
-    from pathlib import Path
 
     if project_path is None:
         project_path = str(Path(file_path).parent)
@@ -52,8 +55,5 @@ def parse_file(file_path: str, project_path: str = None) -> list[CodeChunk]:
 Preprocessing module exports - Enhanced with advanced ChunkPreprocessor
 """
 
-from .chunk import ChunkPreprocessor  # Enhanced version
-from .chunk import ChunkPreprocessor_2  # Original version for backward compatibility
-from .chunk import CodeChunk
 
-__all__ = ["ChunkPreprocessor", "ChunkPreprocessor_2", "CodeChunk"]
+__all__ = ["ChunkPreprocessor", "ChunkPreprocessor2", "CodeChunk"]

@@ -1,12 +1,13 @@
 import hashlib
 import re
+import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
 from src.preprocessing.analyzer import Analyzer
 from src.preprocessing.chunk import CodeChunk
-import textwrap
 
 
 # Mock tree-sitter Node
@@ -62,8 +63,8 @@ class MyClass {
                 start_byte=fn_pos,
                 end_byte=fn_pos + len('function myFunction() {\n  console.log("hello");\n}'),
                 fields={"name": MockNode("identifier", "myFunction",
-                                         start_byte=fn_pos + len('function '),  # Start after "function "
-                                         end_byte=fn_pos + len('function myFunction'))},
+                                         start_byte=fn_pos + len("function "),  # Start after "function "
+                                         end_byte=fn_pos + len("function myFunction"))},
             ),
             MockNode(
                 "class_declaration",
@@ -71,8 +72,8 @@ class MyClass {
                 start_byte=class_pos,
                 end_byte=len(code),
                 fields={"name": MockNode("identifier", "MyClass",
-                                         start_byte=class_pos + len('class '),  # Start after "class "
-                                         end_byte=class_pos + len('class MyClass'))},
+                                         start_byte=class_pos + len("class "),  # Start after "class "
+                                         end_byte=class_pos + len("class MyClass"))},
                 children=[
                     MockNode(
                         "method_definition",
@@ -149,8 +150,8 @@ def test_extract_html_chunks(analyzer):
                 start_byte=section_start,
                 end_byte=section_end,
                 fields={"tag_name": MockNode("tag_name", "section",
-                                             start_byte=section_start+1,  # skip '<'
-                                             end_byte=section_start+8)},  # 'section'
+                                             start_byte=section_start + 1,  # skip '<'
+                                             end_byte=section_start + 8)},  # 'section'
                 children=[
                     MockNode(
                         "element",
@@ -158,8 +159,8 @@ def test_extract_html_chunks(analyzer):
                         start_byte=div_start,
                         end_byte=div_end,
                         fields={"tag_name": MockNode("tag_name", "div",
-                                                     start_byte=div_start+1,  # skip '<'
-                                                     end_byte=div_start+4)}   # 'div'
+                                                     start_byte=div_start + 1,  # skip '<'
+                                                     end_byte=div_start + 4)}   # 'div'
                     )
                 ],
             )
@@ -263,10 +264,12 @@ def test_find_called_symbols(analyzer):
     symbols = analyzer.find_called_symbols(code, "python", symbol_index)
     assert symbols == ["my_function"]
 
+
 def test_calculate_complexity(analyzer):
     code = "if x > 0 and y < 0: ..."
     complexity = analyzer._calculate_complexity(code)
     assert complexity == 3  # 1 (base) + 1 (if) + 1 (and)
+
 
 def test_extract_dependencies(analyzer):
     code = """
@@ -279,6 +282,7 @@ import pandas as pd
     assert "my_module" in deps
     assert "pandas" in deps
 
+
 def test_add_location_metadata(analyzer):
     chunk = CodeChunk(name="test", type="function", code="", file_path="", start_line=0, end_line=0, language="python")
     node = MockNode("function", "", start_point=(0, 0), end_point=(1, 10))
@@ -288,10 +292,12 @@ def test_add_location_metadata(analyzer):
     assert chunk.location["start_column"] == 1
     assert chunk.location["end_column"] == 11
 
+
 def test_add_code_metadata(analyzer):
     chunk = CodeChunk(name="test", type="function", code="async function() {}", file_path="", start_line=1, end_line=1, language="javascript")
     analyzer.add_code_metadata(chunk)
     assert chunk.metadata["is_async"] is True
+
 
 def test_add_analysis_metadata(analyzer):
     chunk = CodeChunk(
@@ -305,7 +311,8 @@ def test_add_analysis_metadata(analyzer):
         location={"start_line": 1, "end_line": 1},
     )
     analyzer.add_analysis_metadata(chunk)
-    assert chunk.analysis["complexity"] == 2 # Changed to 2, as per discussion
+    assert chunk.analysis["complexity"] == 2  # Changed to 2, as per discussion
+
 
 def test_add_relationship_metadata(analyzer):
     chunk = CodeChunk(
@@ -321,6 +328,7 @@ def test_add_relationship_metadata(analyzer):
     assert "imports" in chunk.relationships
     assert "dependencies" in chunk.relationships
 
+
 def test_add_context_metadata(analyzer, tmp_path):
     p = tmp_path / "module" / "test.py"
     p.parent.mkdir()
@@ -329,6 +337,7 @@ def test_add_context_metadata(analyzer, tmp_path):
     analyzer.add_context_metadata(chunk, p, tmp_path)
     assert chunk.context["module_context"] == "module module"
     assert chunk.context["project_context"] == "Project codebase"
+
 
 def test_enhance_chunk_completely(analyzer, tmp_path):
     p = tmp_path / "module" / "test.py"

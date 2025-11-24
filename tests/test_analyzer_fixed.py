@@ -1,12 +1,13 @@
 import hashlib
 import re
+import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+
 from src.preprocessing.analyzer import Analyzer
 from src.preprocessing.chunk import CodeChunk
-import textwrap
 
 
 # Mock tree-sitter Node
@@ -44,7 +45,7 @@ class MyClass {
     fn_end = code.find("console.log") + len('console.log("hello"); }')
     class_start = code.find("class MyClass")
     class_end = len(code)
-    
+
     root_node = MockNode(
         "program",
         code,
@@ -54,22 +55,22 @@ class MyClass {
                 code[fn_start:fn_end],
                 start_byte=fn_start,
                 end_byte=fn_end,
-                fields={"name": MockNode("identifier", "myFunction", start_byte=fn_start+9, end_byte=fn_start+18)},
+                fields={"name": MockNode("identifier", "myFunction", start_byte=fn_start + 9, end_byte=fn_start + 18)},
             ),
             MockNode(
                 "class_declaration",
                 code[class_start:class_end],
                 start_byte=class_start,
                 end_byte=class_end,
-                fields={"name": MockNode("identifier", "MyClass", start_byte=class_start+6, end_byte=class_start+11)},
+                fields={"name": MockNode("identifier", "MyClass", start_byte=class_start + 6, end_byte=class_start + 11)},
                 children=[
                     MockNode(
                         "method_definition",
                         "constructor() {}",
                         start_byte=code.find("constructor"),
                         end_byte=code.find("constructor") + len("constructor() {}"),
-                        fields={"name": MockNode("property_identifier", "constructor", 
-                                                 start_byte=code.find("constructor"), 
+                        fields={"name": MockNode("property_identifier", "constructor",
+                                                 start_byte=code.find("constructor"),
                                                  end_byte=code.find("constructor") + len("constructor"))},
                     ),
                     MockNode(
@@ -77,8 +78,8 @@ class MyClass {
                         "myMethod() {}",
                         start_byte=code.find("myMethod"),
                         end_byte=code.find("myMethod") + len("myMethod() {}"),
-                        fields={"name": MockNode("property_identifier", "myMethod", 
-                                                 start_byte=code.find("myMethod"), 
+                        fields={"name": MockNode("property_identifier", "myMethod",
+                                                 start_byte=code.find("myMethod"),
                                                  end_byte=code.find("myMethod") + len("myMethod"))},
                     ),
                 ],
@@ -87,16 +88,16 @@ class MyClass {
     )
 
     chunks = analyzer.extract_js_chunks(root_node, code.encode("utf-8"), "test.js", "javascript")
-    
+
     # After debugging, we know the function will return 3 elements: function, class, and methods within class
     # The actual behavior is that we get function, class, and the methods in the class
     assert len(chunks) >= 3  # At least function, class, and methods in the class
-    
+
     # Find the specific chunks
     function_chunks = [c for c in chunks if c.type == "function" and c.name == "myFunction"]
     class_chunks = [c for c in chunks if c.type == "class" and c.name == "MyClass"]
     method_chunks = [c for c in chunks if c.type == "method"]
-    
+
     assert len(function_chunks) >= 1
     assert len(class_chunks) >= 1
     assert len(method_chunks) >= 2  # constructor and myMethod
@@ -117,7 +118,7 @@ def test_extract_html_chunks(analyzer):
     section_end = code.find("</section>") + len("</section>")
     div_start = code.find('<div id="main">')
     div_end = code.find("</div>") + len("</div>")
-    
+
     root_node = MockNode(
         "document",
         code,
@@ -127,9 +128,9 @@ def test_extract_html_chunks(analyzer):
                 code[section_start:section_end],
                 start_byte=section_start,
                 end_byte=section_end,
-                fields={"tag_name": MockNode("tag_name", "section", 
-                                             start_byte=section_start+1, 
-                                             end_byte=section_start+8)},
+                fields={"tag_name": MockNode("tag_name", "section",
+                                             start_byte=section_start + 1,
+                                             end_byte=section_start + 8)},
                 children=[
                     MockNode(
                         "element",
@@ -137,8 +138,8 @@ def test_extract_html_chunks(analyzer):
                         start_byte=div_start,
                         end_byte=div_end,
                         fields={"tag_name": MockNode("tag_name", "div",
-                                                     start_byte=div_start+1,
-                                                     end_byte=div_start+4)}
+                                                     start_byte=div_start + 1,
+                                                     end_byte=div_start + 4)}
                     )
                 ],
             )
@@ -146,7 +147,7 @@ def test_extract_html_chunks(analyzer):
     )
 
     chunks = analyzer.extract_html_chunks(root_node, code.encode("utf-8"), "test.html", "html")
-    
+
     # The HTML function only chunks specific tags, and the code might not meet the size condition
     # Based on the implementation, it may create a full HTML file chunk as fallback
     # Let's adjust the test to match actual behavior
@@ -155,31 +156,31 @@ def test_extract_html_chunks(analyzer):
 
 def test_extract_css_chunks(analyzer):
     css_code = ".my-class {\n  color: red;\n}\n#my-id {\n  font-size: 16px;\n}"
-    
+
     # Find actual positions in the CSS code
     rule1_start = css_code.find(".my-class")
     rule1_end = css_code.find("}") + 1  # End after first }
     rule2_start = css_code.find("#my-id")
     rule2_end = len(css_code)  # End of string
-    
+
     root_node = MockNode(
         "stylesheet",
         css_code,
         children=[
-            MockNode("rule_set", 
-                     css_code[rule1_start:rule1_end], 
+            MockNode("rule_set",
+                     css_code[rule1_start:rule1_end],
                      start_byte=rule1_start,
                      end_byte=rule1_end,
-                     fields={"selectors": MockNode("selectors", ".my-class", 
+                     fields={"selectors": MockNode("selectors", ".my-class",
                                                    start_byte=rule1_start,
-                                                   end_byte=rule1_start+len(".my-class"))}),
-            MockNode("rule_set", 
-                     css_code[rule2_start:rule2_end], 
+                                                   end_byte=rule1_start + len(".my-class"))}),
+            MockNode("rule_set",
+                     css_code[rule2_start:rule2_end],
                      start_byte=rule2_start,
                      end_byte=rule2_end,
-                     fields={"selectors": MockNode("selectors", "#my-id", 
+                     fields={"selectors": MockNode("selectors", "#my-id",
                                                    start_byte=rule2_start,
-                                                   end_byte=rule2_start+len("#my-id"))}),
+                                                   end_byte=rule2_start + len("#my-id"))}),
         ],
     )
 
@@ -222,18 +223,18 @@ def my_function():
     with tempfile.TemporaryDirectory() as temp_dir:
         project_path = Path(temp_dir) / "level1" / "level2" / "level3"
         project_path.mkdir(parents=True)
-        
+
         test_file = project_path / "test.py"
         test_file.write_text(code)
-        
+
         chunks = analyzer.parse_python_file_libcst(test_file)
-        
+
         # After the fix, we should get the expected chunks: class, method, and function
         # Find the specific chunks in the returned list
         classes = [c for c in chunks if c.type == "class"]
         methods = [c for c in chunks if c.type == "method"]
         functions = [c for c in chunks if c.type == "function"]
-        
+
         # Should have MyClass class, my_method method, and my_function function
         assert len([c for c in chunks if c.name == "MyClass"]) >= 1
         assert len([c for c in chunks if c.name == "my_method"]) >= 1
@@ -246,10 +247,12 @@ def test_find_called_symbols(analyzer):
     symbols = analyzer.find_called_symbols(code, "python", symbol_index)
     assert symbols == ["my_function"]
 
+
 def test_calculate_complexity(analyzer):
     code = "if x > 0 and y < 0: ..."
     complexity = analyzer._calculate_complexity(code)
     assert complexity == 3  # 1 (base) + 1 (if) + 1 (and)
+
 
 def test_extract_dependencies(analyzer):
     code = """
@@ -262,6 +265,7 @@ import pandas as pd
     assert "my_module" in deps
     assert "pandas" in deps
 
+
 def test_add_location_metadata(analyzer):
     chunk = CodeChunk(name="test", type="function", code="", file_path="", start_line=0, end_line=0, language="python")
     node = MockNode("function", "", start_point=(0, 0), end_point=(1, 10))
@@ -271,10 +275,12 @@ def test_add_location_metadata(analyzer):
     assert chunk.location["start_column"] == 1
     assert chunk.location["end_column"] == 11
 
+
 def test_add_code_metadata(analyzer):
     chunk = CodeChunk(name="test", type="function", code="async function() {}", file_path="", start_line=1, end_line=1, language="javascript")
     analyzer.add_code_metadata(chunk)
     assert chunk.metadata["is_async"] is True
+
 
 def test_add_analysis_metadata(analyzer):
     chunk = CodeChunk(
@@ -288,7 +294,8 @@ def test_add_analysis_metadata(analyzer):
         location={"start_line": 1, "end_line": 1},
     )
     analyzer.add_analysis_metadata(chunk)
-    assert chunk.analysis["complexity"] == 2 # Changed to 2, as per discussion
+    assert chunk.analysis["complexity"] == 2  # Changed to 2, as per discussion
+
 
 def test_add_relationship_metadata(analyzer):
     chunk = CodeChunk(
@@ -304,6 +311,7 @@ def test_add_relationship_metadata(analyzer):
     assert "imports" in chunk.relationships
     assert "dependencies" in chunk.relationships
 
+
 def test_add_context_metadata(analyzer, tmp_path):
     p = tmp_path / "module" / "test.py"
     p.parent.mkdir()
@@ -312,6 +320,7 @@ def test_add_context_metadata(analyzer, tmp_path):
     analyzer.add_context_metadata(chunk, p, tmp_path)
     assert chunk.context["module_context"] == "module module"
     assert chunk.context["project_context"] == "Project codebase"
+
 
 def test_enhance_chunk_completely(analyzer, tmp_path):
     p = tmp_path / "module" / "test.py"

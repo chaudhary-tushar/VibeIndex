@@ -1,4 +1,5 @@
 import pytest
+
 from src.preprocessing.chunk import CodeChunk
 
 
@@ -13,7 +14,7 @@ def test_codechunk_creation():
         start_line=1,
         end_line=1
     )
-    
+
     assert chunk.type == "function"
     assert chunk.name == "test_function"
     assert chunk.code == "def test_function(): pass"
@@ -36,7 +37,7 @@ def test_codechunk_default_values():
         start_line=1,
         end_line=1
     )
-    
+
     # Check default values
     assert chunk.id != ""
     assert chunk.qualified_name == "test.test_function"
@@ -69,7 +70,7 @@ def test_codechunk_dependencies_references_defines():
         references=["os"],
         defines=["test_function"]
     )
-    
+
     assert chunk.dependencies == ["os"]
     assert chunk.references == ["os"]
     assert chunk.defines == ["test_function"]
@@ -86,7 +87,7 @@ def test_codechunk_id_generation():
         start_line=1,
         end_line=1
     )
-    
+
     chunk2 = CodeChunk(
         type="function",
         name="func2",
@@ -96,7 +97,7 @@ def test_codechunk_id_generation():
         start_line=5,
         end_line=5
     )
-    
+
     # IDs should be different for different name/line combinations
     assert chunk1.id != chunk2.id
     # IDs should be 12 characters as per implementation
@@ -117,7 +118,7 @@ def test_codechunk_qualified_name_generation():
         end_line=1
     )
     assert chunk1.qualified_name == "utils.my_function"
-    
+
     # Test with class
     chunk2 = CodeChunk(
         type="class",
@@ -129,7 +130,7 @@ def test_codechunk_qualified_name_generation():
         end_line=1
     )
     assert chunk2.qualified_name == "models.MyClass"
-    
+
     # Test with file type (should just use name)
     chunk3 = CodeChunk(
         type="file",
@@ -156,9 +157,9 @@ def test_codechunk_to_dict():
         docstring="A test function",
         complexity=3
     )
-    
+
     chunk_dict = chunk.to_dict()
-    
+
     assert chunk_dict["type"] == "function"
     assert chunk_dict["name"] == "test_function"
     assert chunk_dict["code"] == "def test_function(): pass"
@@ -181,7 +182,7 @@ def test_codechunk_metadata_structures():
         start_line=1,
         end_line=1
     )
-    
+
     # All metadata structures should be initialized as empty dicts
     assert isinstance(chunk.location, dict)
     assert isinstance(chunk.metadata, dict)
@@ -189,7 +190,7 @@ def test_codechunk_metadata_structures():
     assert isinstance(chunk.analysis, dict)
     assert isinstance(chunk.relationships, dict)
     assert isinstance(chunk.context, dict)
-    
+
     # Dependencies and references should be empty lists by default
     assert isinstance(chunk.dependencies, list)
     assert isinstance(chunk.references, list)
@@ -204,7 +205,7 @@ def test_codechunk_with_custom_values():
     custom_analysis = {"complexity": 10, "tokens": 50}
     custom_relationships = {"imports": ["os", "sys"], "children": ["method1"]}
     custom_context = {"module": "utils", "domain": "web"}
-    
+
     chunk = CodeChunk(
         type="class",
         name="TestClass",
@@ -229,7 +230,7 @@ def test_codechunk_with_custom_values():
         relationships=custom_relationships,
         context=custom_context
     )
-    
+
     assert chunk.id == "custom-id"
     assert chunk.qualified_name == "test.TestClass"
     assert chunk.docstring == "Custom docstring"

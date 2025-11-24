@@ -26,6 +26,9 @@ dependencies = [
     "coverage>=7.12.0",
     "ruff>=0.14.6",
     "pre-commit>=4.5.0",
+    "langchain>=1.0.8",
+    "langchain-ollama>=1.0.0",
+    "langchain-openai>=1.0.3",
 ]
 
 
@@ -127,6 +130,7 @@ ignore = [
   "RUF012", # Mutable class attributes should be annotated with `typing.ClassVar`
   "SIM102", # sometimes it's better to nest
   "PGH004",
+  "S324",
   "COM812",
   "F541",
 ]

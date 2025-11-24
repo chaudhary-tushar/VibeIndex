@@ -1,8 +1,9 @@
-import tempfile
 import os
+import tempfile
 from pathlib import Path
-from src.preprocessing.parser import CodeParser
+
 from src.preprocessing.chunk import CodeChunk
+from src.preprocessing.parser import CodeParser
 
 
 def test_code_parser_initialization():
@@ -18,19 +19,19 @@ def test_should_ignore():
     """Test that the ignore functionality works correctly"""
     with tempfile.TemporaryDirectory() as temp_dir:
         parser = CodeParser(temp_dir)
-        
+
         # Create a file that should be ignored
         ignored_file = Path(temp_dir) / "node_modules" / "some_file.js"
         ignored_file.parent.mkdir(parents=True, exist_ok=True)
         ignored_file.touch()
-        
+
         # Check if it's ignored
         assert parser._should_ignore(ignored_file)
-        
+
         # Create a normal Python file that shouldn't be ignored
         normal_file = Path(temp_dir) / "test.py"
         normal_file.touch()
-        
+
         # Check that it's not ignored
         assert not parser._should_ignore(normal_file)
 
@@ -39,11 +40,11 @@ def test_get_parser():
     """Test that parsers can be retrieved for supported languages"""
     with tempfile.TemporaryDirectory() as temp_dir:
         parser = CodeParser(temp_dir)
-        
+
         # Test Python parser
         python_parser = parser._get_parser("python")
         assert python_parser is not None
-        
+
         # Test JavaScript parser
         js_parser = parser._get_parser("javascript")
         assert js_parser is not None
@@ -111,7 +112,7 @@ def test_parse_project_empty():
     with tempfile.TemporaryDirectory() as temp_dir:
         parser = CodeParser(temp_dir)
         parser.parse_project()
-        
+
         # For an empty project, we should have no chunks
         assert len(parser.chunks) == 0
 
@@ -120,10 +121,10 @@ def test_save_results():
     """Test saving parsed results"""
     with tempfile.TemporaryDirectory() as temp_dir:
         output_file = Path(temp_dir) / "output.json"
-        
+
         parser = CodeParser(temp_dir)
         parser.save_results(str(output_file))
-        
+
         # Output file should exist
         assert output_file.exists()
 

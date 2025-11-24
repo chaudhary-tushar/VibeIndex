@@ -11,7 +11,7 @@ class MetadataExtractor:
     def extract_docstring(self, node, code_bytes: bytes) -> str | None:
         """Extract docstring from AST node based on the language"""
         if node.type in ["function_definition", "class_definition"]:
-            code_str = code_bytes.decode('utf-8')
+            # code_str = code_bytes.decode('utf-8')
 
             # For Python, docstrings are stored as the first expression in the function/class
             if node.type == "function_definition" or node.type == "class_definition":
@@ -24,7 +24,7 @@ class MetadataExtractor:
                             string_node = child.children[0]
                             start_byte = string_node.start_byte
                             end_byte = string_node.end_byte
-                            docstring = code_bytes[start_byte:end_byte].decode('utf-8')
+                            docstring = code_bytes[start_byte:end_byte].decode("utf-8")
                             # Remove quotes
                             docstring = docstring.strip().strip('"""').strip("'''").strip('"').strip("'")
                             return docstring
@@ -32,7 +32,7 @@ class MetadataExtractor:
                         # Direct string child
                         start_byte = child.start_byte
                         end_byte = child.end_byte
-                        docstring = code_bytes[start_byte:end_byte].decode('utf-8')
+                        docstring = code_bytes[start_byte:end_byte].decode("utf-8")
                         # Remove quotes
                         docstring = docstring.strip().strip('"""').strip("'''").strip('"').strip("'")
                         return docstring
