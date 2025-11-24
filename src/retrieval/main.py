@@ -14,7 +14,7 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 qdrant_client = QdrantClient(
     host=os.getenv("QDRANT_HOST", "localhost"),
     port=int(os.getenv("QDRANT_PORT", "6333")),
-    api_key=os.getenv("QDRANT_API_KEY")
+    api_key=os.getenv("QDRANT_API_KEY"),
 )
 
 
@@ -38,7 +38,7 @@ async def retrieve(query: Query):
             collection_name="code_chunks",
             query_vector=query_embedding,
             limit=10,  # Adjust as needed
-            with_payload=True
+            with_payload=True,
         )
 
         # Perform keyword search (BM25-like approach)
@@ -46,7 +46,7 @@ async def retrieve(query: Query):
             collection_name="code_chunks",
             query_text=query.text,  # This would require text-based indexing
             limit=10,  # Adjust as needed
-            with_payload=True
+            with_payload=True,
         )
 
         # Combine and rank results
@@ -60,7 +60,7 @@ async def retrieve(query: Query):
                 "id": result.id,
                 "score": result.score,
                 "payload": result.payload,
-                "search_type": "vector"
+                "search_type": "vector",
             })
 
         # Add keyword search results that aren't already in the list
@@ -71,7 +71,7 @@ async def retrieve(query: Query):
                     "id": result.id,
                     "score": result.score,
                     "payload": result.payload,
-                    "search_type": "keyword"
+                    "search_type": "keyword",
                 })
 
         # Sort by score in descending order

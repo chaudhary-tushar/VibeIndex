@@ -446,7 +446,7 @@ class Analyzer:
                 "start_line": chunk.start_line,
                 "end_line": chunk.end_line,
                 "start_column": 0,  # Default to 0 if not available
-                "end_column": 0,   # Default to 0 if not available
+                "end_column": 0,  # Default to 0 if not available
             }
             return
 

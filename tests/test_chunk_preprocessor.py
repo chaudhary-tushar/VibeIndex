@@ -21,7 +21,7 @@ def test_chunk_preprocessor_deduplicate_no_duplicates():
     chunks = [
         {"id": "1", "code": "def func1(): pass"},
         {"id": "2", "code": "def func2(): pass"},
-        {"id": "3", "code": "class MyClass: pass"}
+        {"id": "3", "code": "class MyClass: pass"},
     ]
 
     result = preprocessor.deduplicate(chunks)
@@ -80,7 +80,7 @@ def test_chunk_preprocessor_enhance_chunk_basic():
         "dependencies": ["os", "sys"],
         "defines": ["test_func"],
         "context": {"file_hierarchy": ["src", "utils"]},
-        "metadata": {"decorators": ["@staticmethod"]}
+        "metadata": {"decorators": ["@staticmethod"]},
     }
 
     enhanced = preprocessor.enhance_chunk(chunk)
@@ -136,7 +136,7 @@ def test_chunk_preprocessor_enhance_chunk_with_context_string():
         "code": "<div>content</div>",
         "file_path": "test.html",
         "language": "html",
-        "context": "A div element"
+        "context": "A div element",
     }
 
     enhanced = preprocessor.enhance_chunk(chunk)
@@ -152,7 +152,7 @@ def test_chunk_preprocessor_validate_chunk_valid():
 
     chunk = {
         "code": "def small_func(): pass",
-        "embedding_text": "PYTHON FUNCTION: test.small_func\ndef small_func(): pass"
+        "embedding_text": "PYTHON FUNCTION: test.small_func\ndef small_func(): pass",
     }
 
     # This should return True (valid chunk)
@@ -166,10 +166,7 @@ def test_chunk_preprocessor_validate_chunk_too_large():
 
     # Create a large code string (more than 8192 * 4 = 32768 characters roughly)
     large_code = "x = " + "a" * 40000 + "\n"
-    chunk = {
-        "code": large_code,
-        "embedding_text": large_code
-    }
+    chunk = {"code": large_code, "embedding_text": large_code}
 
     is_valid = preprocessor.validate_chunk(chunk, max_tokens=8192)
     assert not is_valid  # Should be invalid due to size
@@ -181,12 +178,33 @@ def test_chunk_preprocessor_process_chunks():
     preprocessor = ChunkPreprocessor()
 
     chunks = [
-        {"id": "1", "code": "def func1(): pass", "type": "function", "name": "func1",
-         "file_path": "test.py", "language": "python", "qualified_name": "test.func1"},
-        {"id": "2", "code": "def func2(): pass", "type": "function", "name": "func2",
-         "file_path": "test.py", "language": "python", "qualified_name": "test.func2"},
-        {"id": "3", "code": "def func1(): pass", "type": "function", "name": "func1",  # Duplicate
-         "file_path": "test.py", "language": "python", "qualified_name": "test.func1"},
+        {
+            "id": "1",
+            "code": "def func1(): pass",
+            "type": "function",
+            "name": "func1",
+            "file_path": "test.py",
+            "language": "python",
+            "qualified_name": "test.func1",
+        },
+        {
+            "id": "2",
+            "code": "def func2(): pass",
+            "type": "function",
+            "name": "func2",
+            "file_path": "test.py",
+            "language": "python",
+            "qualified_name": "test.func2",
+        },
+        {
+            "id": "3",
+            "code": "def func1(): pass",
+            "type": "function",
+            "name": "func1",  # Duplicate
+            "file_path": "test.py",
+            "language": "python",
+            "qualified_name": "test.func1",
+        },
     ]
 
     # Step 1: Deduplicate
@@ -229,10 +247,14 @@ def test_chunk_preprocessor_stats():
     assert preprocessor.stats["total"] == 0  # Total stat is never incremented in the implementation
     assert preprocessor.stats["duplicates"] == 1
 
-    enhanced = preprocessor.enhance_chunk({"type": "function", "name": "test",
-                                          "code": "def test(): pass",
-                                          "file_path": "test.py", "language": "python",
-                                          "qualified_name": "test.test"})
+    enhanced = preprocessor.enhance_chunk({
+        "type": "function",
+        "name": "test",
+        "code": "def test(): pass",
+        "file_path": "test.py",
+        "language": "python",
+        "qualified_name": "test.test",
+    })
     assert preprocessor.stats["enhanced"] == 1
 
     # Create a validation that fails

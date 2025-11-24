@@ -23,11 +23,6 @@
 **Safe to delete?**: Partial
 **Reason**: Serves as blueprint; gaps remain.
 
-### code_reorganization_plan.md
-**Original functionality/plans**: Phased merge old_code to src/ (config, core, RAG, CLI, tests).
-**Implementation status**: Phases 1-2 complete; Phase 3 RAG partial (some empty files); CLI full.
-**Safe to delete?**: Partial
-**Reason**: Plan partially executed.
 
 ### idea_migration.md
 **Original functionality/plans**: Update arch docs; impl remaining components (validator, query_processor, etc.).

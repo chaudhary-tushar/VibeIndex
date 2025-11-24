@@ -12,7 +12,7 @@ def test_codechunk_creation():
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     assert chunk.type == "function"
@@ -35,7 +35,7 @@ def test_codechunk_default_values():
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     # Check default values
@@ -68,7 +68,7 @@ def test_codechunk_dependencies_references_defines():
         end_line=2,
         dependencies=["os"],
         references=["os"],
-        defines=["test_function"]
+        defines=["test_function"],
     )
 
     assert chunk.dependencies == ["os"]
@@ -85,7 +85,7 @@ def test_codechunk_id_generation():
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     chunk2 = CodeChunk(
@@ -95,7 +95,7 @@ def test_codechunk_id_generation():
         file_path="test.py",
         language="python",
         start_line=5,
-        end_line=5
+        end_line=5,
     )
 
     # IDs should be different for different name/line combinations
@@ -115,7 +115,7 @@ def test_codechunk_qualified_name_generation():
         file_path="src/utils.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
     assert chunk1.qualified_name == "utils.my_function"
 
@@ -127,7 +127,7 @@ def test_codechunk_qualified_name_generation():
         file_path="src/models.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
     assert chunk2.qualified_name == "models.MyClass"
 
@@ -139,7 +139,7 @@ def test_codechunk_qualified_name_generation():
         file_path="src/config.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
     assert chunk3.qualified_name == "config"
 
@@ -155,7 +155,7 @@ def test_codechunk_to_dict():
         start_line=1,
         end_line=1,
         docstring="A test function",
-        complexity=3
+        complexity=3,
     )
 
     chunk_dict = chunk.to_dict()
@@ -180,7 +180,7 @@ def test_codechunk_metadata_structures():
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     # All metadata structures should be initialized as empty dicts
@@ -228,7 +228,7 @@ def test_codechunk_with_custom_values():
         documentation=custom_documentation,
         analysis=custom_analysis,
         relationships=custom_relationships,
-        context=custom_context
+        context=custom_context,
     )
 
     assert chunk.id == "custom-id"

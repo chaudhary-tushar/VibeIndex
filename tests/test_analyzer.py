@@ -12,7 +12,17 @@ from src.preprocessing.chunk import CodeChunk
 
 # Mock tree-sitter Node
 class MockNode:
-    def __init__(self, type, text, start_point=(0, 0), end_point=(0, 0), children=None, fields=None, start_byte=None, end_byte=None):
+    def __init__(
+        self,
+        type,
+        text,
+        start_point=(0, 0),
+        end_point=(0, 0),
+        children=None,
+        fields=None,
+        start_byte=None,
+        end_byte=None,
+    ):
         self.type = type
         # Store text as string and calculate byte positions properly
         self.text = text
@@ -62,36 +72,56 @@ class MyClass {
                 'function myFunction() {\n  console.log("hello");\n}',
                 start_byte=fn_pos,
                 end_byte=fn_pos + len('function myFunction() {\n  console.log("hello");\n}'),
-                fields={"name": MockNode("identifier", "myFunction",
-                                         start_byte=fn_pos + len("function "),  # Start after "function "
-                                         end_byte=fn_pos + len("function myFunction"))},
+                fields={
+                    "name": MockNode(
+                        "identifier",
+                        "myFunction",
+                        start_byte=fn_pos + len("function "),  # Start after "function "
+                        end_byte=fn_pos + len("function myFunction"),
+                    )
+                },
             ),
             MockNode(
                 "class_declaration",
                 code[class_pos:],
                 start_byte=class_pos,
                 end_byte=len(code),
-                fields={"name": MockNode("identifier", "MyClass",
-                                         start_byte=class_pos + len("class "),  # Start after "class "
-                                         end_byte=class_pos + len("class MyClass"))},
+                fields={
+                    "name": MockNode(
+                        "identifier",
+                        "MyClass",
+                        start_byte=class_pos + len("class "),  # Start after "class "
+                        end_byte=class_pos + len("class MyClass"),
+                    )
+                },
                 children=[
                     MockNode(
                         "method_definition",
                         "constructor() {}",
                         start_byte=constructor_pos,
                         end_byte=constructor_pos + len("constructor() {}"),
-                        fields={"name": MockNode("property_identifier", "constructor",
-                                                 start_byte=constructor_pos,
-                                                 end_byte=constructor_pos + len("constructor"))},
+                        fields={
+                            "name": MockNode(
+                                "property_identifier",
+                                "constructor",
+                                start_byte=constructor_pos,
+                                end_byte=constructor_pos + len("constructor"),
+                            )
+                        },
                     ),
                     MockNode(
                         "method_definition",
                         "myMethod() {}",
                         start_byte=method_pos,
                         end_byte=method_pos + len("myMethod() {}"),
-                        fields={"name": MockNode("property_identifier", "myMethod",
-                                                 start_byte=method_pos,
-                                                 end_byte=method_pos + len("myMethod"))},
+                        fields={
+                            "name": MockNode(
+                                "property_identifier",
+                                "myMethod",
+                                start_byte=method_pos,
+                                end_byte=method_pos + len("myMethod"),
+                            )
+                        },
                     ),
                 ],
             ),
@@ -149,18 +179,28 @@ def test_extract_html_chunks(analyzer):
                 code[section_start:section_end],
                 start_byte=section_start,
                 end_byte=section_end,
-                fields={"tag_name": MockNode("tag_name", "section",
-                                             start_byte=section_start + 1,  # skip '<'
-                                             end_byte=section_start + 8)},  # 'section'
+                fields={
+                    "tag_name": MockNode(
+                        "tag_name",
+                        "section",
+                        start_byte=section_start + 1,  # skip '<'
+                        end_byte=section_start + 8,
+                    )
+                },  # 'section'
                 children=[
                     MockNode(
                         "element",
                         code[div_start:div_end],
                         start_byte=div_start,
                         end_byte=div_end,
-                        fields={"tag_name": MockNode("tag_name", "div",
-                                                     start_byte=div_start + 1,  # skip '<'
-                                                     end_byte=div_start + 4)}   # 'div'
+                        fields={
+                            "tag_name": MockNode(
+                                "tag_name",
+                                "div",
+                                start_byte=div_start + 1,  # skip '<'
+                                end_byte=div_start + 4,
+                            )
+                        },  # 'div'
                     )
                 ],
             )
@@ -191,18 +231,22 @@ def test_extract_css_chunks(analyzer):
         "stylesheet",
         css_code,
         children=[
-            MockNode("rule_set", ".my-class { color: red; }",
-                     start_byte=my_class_pos,  # Position of the rule start
-                     end_byte=css_code.find("}", css_code.find("red")) + 1,  # End after first }
-                     fields={"selectors": MockNode("selectors", ".my-class",
-                                                   start_byte=my_class_pos,
-                                                   end_byte=my_class_end)}),
-            MockNode("rule_set", "#my-id { font-size: 16px; }",
-                     start_byte=my_id_pos,  # Position of the rule start
-                     end_byte=len(css_code),  # End of string
-                     fields={"selectors": MockNode("selectors", "#my-id",
-                                                   start_byte=my_id_pos,
-                                                   end_byte=my_id_end)}),
+            MockNode(
+                "rule_set",
+                ".my-class { color: red; }",
+                start_byte=my_class_pos,  # Position of the rule start
+                end_byte=css_code.find("}", css_code.find("red")) + 1,  # End after first }
+                fields={
+                    "selectors": MockNode("selectors", ".my-class", start_byte=my_class_pos, end_byte=my_class_end)
+                },
+            ),
+            MockNode(
+                "rule_set",
+                "#my-id { font-size: 16px; }",
+                start_byte=my_id_pos,  # Position of the rule start
+                end_byte=len(css_code),  # End of string
+                fields={"selectors": MockNode("selectors", "#my-id", start_byte=my_id_pos, end_byte=my_id_end)},
+            ),
         ],
     )
 
@@ -294,7 +338,15 @@ def test_add_location_metadata(analyzer):
 
 
 def test_add_code_metadata(analyzer):
-    chunk = CodeChunk(name="test", type="function", code="async function() {}", file_path="", start_line=1, end_line=1, language="javascript")
+    chunk = CodeChunk(
+        name="test",
+        type="function",
+        code="async function() {}",
+        file_path="",
+        start_line=1,
+        end_line=1,
+        language="javascript",
+    )
     analyzer.add_code_metadata(chunk)
     assert chunk.metadata["is_async"] is True
 
@@ -333,7 +385,9 @@ def test_add_context_metadata(analyzer, tmp_path):
     p = tmp_path / "module" / "test.py"
     p.parent.mkdir()
     p.touch()
-    chunk = CodeChunk(name="test", type="function", code="", file_path=str(p), start_line=1, end_line=1, language="python")
+    chunk = CodeChunk(
+        name="test", type="function", code="", file_path=str(p), start_line=1, end_line=1, language="python"
+    )
     analyzer.add_context_metadata(chunk, p, tmp_path)
     assert chunk.context["module_context"] == "module module"
     assert chunk.context["project_context"] == "Project codebase"

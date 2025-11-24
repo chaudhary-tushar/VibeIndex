@@ -126,7 +126,7 @@ def test_extract_tags_and_categories_basic(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     tags = metadata_extractor.extract_tags_and_categories(chunk)
@@ -150,7 +150,7 @@ def test_extract_tags_and_categories_medium_size(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=31  # 31 lines total
+        end_line=31,  # 31 lines total
     )
 
     tags = metadata_extractor.extract_tags_and_categories(chunk)
@@ -169,7 +169,7 @@ def test_extract_tags_and_categories_large_size(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=61  # 61 lines total
+        end_line=61,  # 61 lines total
     )
 
     tags = metadata_extractor.extract_tags_and_categories(chunk)
@@ -197,7 +197,7 @@ def test_extract_tags_and_categories_high_complexity(metadata_extractor):
         language="python",
         start_line=1,
         end_line=10,
-        complexity=15  # High complexity
+        complexity=15,  # High complexity
     )
 
     tags = metadata_extractor.extract_tags_and_categories(chunk)
@@ -220,7 +220,7 @@ def test_extract_tags_and_categories_medium_complexity(metadata_extractor):
         language="python",
         start_line=1,
         end_line=5,
-        complexity=7  # Medium complexity
+        complexity=7,  # Medium complexity
     )
 
     tags = metadata_extractor.extract_tags_and_categories(chunk)
@@ -238,7 +238,7 @@ def test_extract_tags_and_categories_with_dependencies(metadata_extractor):
         language="python",
         start_line=1,
         end_line=1,
-        dependencies=["os", "sys"]
+        dependencies=["os", "sys"],
     )
 
     tags = metadata_extractor.extract_tags_and_categories(chunk)
@@ -255,7 +255,7 @@ def test_enhance_chunk_metadata_basic(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=3
+        end_line=3,
     )
 
     enhanced_chunk = metadata_extractor.enhance_chunk_metadata(chunk)
@@ -279,7 +279,7 @@ def test_enhance_chunk_metadata_preserves_existing_values(metadata_extractor):
         language="python",
         start_line=1,
         end_line=1,
-        docstring="Original docstring"
+        docstring="Original docstring",
     )
 
     # Add some tags to the chunk
@@ -305,7 +305,7 @@ def test_enhance_chunk_metadata_no_tags(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     # Explicitly remove tags if they exist
@@ -331,7 +331,7 @@ def test_enhance_chunk_metadata_signature_extraction(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=2
+        end_line=2,
     )
 
     enhanced_chunk = metadata_extractor.enhance_chunk_metadata(chunk)
@@ -351,7 +351,7 @@ def test_enhance_chunk_metadata_line_count(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=5,
-        end_line=14  # This would be 10 lines (14-5+1)
+        end_line=14,  # This would be 10 lines (14-5+1)
     )
 
     enhanced_chunk = metadata_extractor.enhance_chunk_metadata(chunk)
@@ -373,7 +373,7 @@ def test_enhance_chunk_metadata_entry_point_detection(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     enhanced_chunk = metadata_extractor.enhance_chunk_metadata(main_chunk)
@@ -394,7 +394,7 @@ def test_enhance_chunk_metadata_non_entry_point(metadata_extractor):
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     enhanced_chunk = metadata_extractor.enhance_chunk_metadata(regular_chunk)

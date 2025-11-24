@@ -83,10 +83,7 @@ class MyClass:
 """
 
     # Define a symbol index with some project symbols
-    symbol_index = {
-        "HelperFunction": "path/to/file",
-        "MyClass": "path/to/file"
-    }
+    symbol_index = {"HelperFunction": "path/to/file", "MyClass": "path/to/file"}
 
     deps = dependency_mapper.extract_dependencies(code, "python", symbol_index)
 
@@ -137,10 +134,7 @@ function myFunc() {
 const instance = new myFunc();
 """
 
-    symbol_index = {
-        "MyClass": "path/to/file",
-        "MyOtherClass": "path/to/file"
-    }
+    symbol_index = {"MyClass": "path/to/file", "MyOtherClass": "path/to/file"}
 
     deps = dependency_mapper.extract_dependencies(code, "javascript", symbol_index)
 
