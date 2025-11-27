@@ -6,7 +6,7 @@ dist/
 wheels/
 *.egg-info
 .coverage
-data/*
+data/**
 .pytest_cache/
 chunks.json
 tree_output_*.txt

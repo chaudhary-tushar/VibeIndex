@@ -391,9 +391,8 @@ def cli():
 
 @cli.command()
 @click.option("--path", "-p", default=".", help="Project path to ingest")
-@click.option("--output", "-o", help="Output file for parsed chunks (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def ingest(path, output, verbose):
+def ingest(path, verbose):
     """
     Run the data ingestion pipeline - parse code into chunks.
     """
@@ -406,19 +405,6 @@ def ingest(path, output, verbose):
         if verbose:
             click.echo(f"Found {len(parser.chunks)} code chunks")
             click.echo(f"Statistics: {dict(parser.stats)}")
-
-        # Save results if output specified
-        if output:
-            parser.save_results(output)
-            click.echo(f"Results saved to: {output}")
-            parser.visualize_results()
-        else:
-            # Show summary
-            click.echo("\nParsed chunks summary:")
-            for i, chunk in enumerate(parser.chunks[:10]):  # Show first 10
-                click.echo(f"  {i + 1}. {chunk.name} ({chunk.type}) - {chunk.file_path}")
-            if len(parser.chunks) > 10:
-                click.echo(f"  ... and {len(parser.chunks) - 10} more")
 
         click.echo("\n✅ Code parsing complete!")
 

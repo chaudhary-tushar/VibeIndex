@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from llama_index.core import Document
-from tree_sitter import Tree
+from tree_sitter import Node
 
 BASE_PATH = Path(__file__).parent.parent.parent
 DATA_DIR = BASE_PATH / "data"
@@ -92,8 +92,8 @@ def _determine_file_extension(data: Any) -> str:
         str: The appropriate file extension
     """
     # Check for specific data types
-    if isinstance(data, Tree):
-        return ".sexp"
+    if isinstance(data, Node):
+        return "txt"
     if isinstance(data, dict):
         return "json"
     if isinstance(data, list):
@@ -211,17 +211,26 @@ def _save_csv_data(data: Any, file_path: Path) -> None:
 
 def _save_txt_data(data: Any, file_path: Path) -> None:
     """Save data as text format."""
-    with Path(file_path).open("w", encoding="utf-8") as file:
-        if isinstance(data, list):
-            # Join list items with newlines
-            for item in data:
-                file.write(f"{item!s}\n")
-        else:
-            # Convert to string
-            file.write(str(data))
+    if isinstance(data, Node):
+        _save_tree_data(data, file_path)
+    else:
+        with Path(file_path).open("w", encoding="utf-8") as file:
+            if isinstance(data, list):
+                # Join list items with newlines
+                for item in data:
+                    file.write(f"{item!s}\n")
+            else:
+                # Convert to string
+                file.write(str(data))
 
 
-def _save_tree_data(data: Any, file_path: Path) -> None:
-    s_expression = data.root_node.sexp()
+def _save_tree_data(data: Node, file_path: Path) -> None:
+    print("came into trees_sitter_save results")
     with Path(file_path).open("w") as f:
-        f.write(s_expression)
+
+        def print_tree_to_file(node: Node, indent=0):
+            f.write("  " * indent + node.type + "\n")
+            for child in node.children:
+                print_tree_to_file(child, indent + 1)
+
+        print_tree_to_file(data)

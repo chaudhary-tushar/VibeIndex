@@ -297,7 +297,7 @@ class Analyzer:
                         selector_node = child
                 name = "unknown_selector"
                 if selector_node:
-                    print("here", end="*")
+                    # print("here", end="*")
                     name = code_bytes[selector_node.start_byte : selector_node.end_byte].decode("utf8").strip()
                 called_symbols = self.find_called_symbols(code, language, {})
 

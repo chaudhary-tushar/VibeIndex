@@ -11,10 +11,10 @@ from pathspec import PathSpec
 from pathspec.patterns import GitWildMatchPattern
 from rich.console import Console
 from rich.table import Table
-from tree_sitter import Node
 from tree_sitter import Parser
 from tree_sitter import Tree
 
+from src.config.data_store import DATA_DIR
 from src.config.data_store import save_data
 
 from .analyzer import Analyzer
@@ -176,18 +176,6 @@ class CodeParser:
             return []
 
         tree: Tree = self._parse_with_tree_sitter(parser, code_bytes, file_path)
-        print(dir(tree))
-        # print(tree.root_node.)
-        with Path("tree_output_css.txt").open("w") as f:
-
-            def print_tree_to_file(node: Node, indent=0):
-                f.write("  " * indent + node.type + "\n")
-                for child in node.children:
-                    print_tree_to_file(child, indent + 1)
-
-            print_tree_to_file(tree.root_node)
-
-        # Save tree data using the dedicated function
         save_data(tree.root_node, language=language, method="tree_sitter_parsing")
 
         if isinstance(tree, list):  # Error occurred
@@ -233,47 +221,11 @@ class CodeParser:
             return []
         return []
 
-    def parse_project(self):
-        """Parse entire project"""
-        console.print(f"Parsing Project: {self.project_path}")
-
-        files = self.discover_files()
-        console.print(f"[green]Found {len(files)} code files[/green]\n")
-        # sys.exit()
-
-        self.symbol_index = {}
-
-        with console.status("[bold green]Parsing files...") as status:
-            for i, file_path in enumerate(files, 1):
-                relative_path = str(file_path.relative_to(self.project_path))
-                status.update(f"[bold green]Parsing {i}/{len(files)}: {relative_path}")
-
-                # Parse the file
-                chunks = self.parse_file(file_path)
-                self.chunks.extend(chunks)
-
-                # Build symbol index for cross-references
-                ctag_symbols = self.run_ctags(file_path)
-                self.stats["ctags_symbols"] += len(ctag_symbols)
-
-                for sym in ctag_symbols:
-                    name = sym["name"]
-                    if name not in self.symbol_index:
-                        self.symbol_index[name] = []
-                    self.symbol_index[name].append({
-                        "file": relative_path,
-                        "line": sym.get("line", sym.get("address", "1")),
-                        "kind": sym.get("kind", "unknown"),
-                        "scope": sym.get("scope", None),
-                        "path": str(file_path),
-                    })
-
-        console.print("✓ Parsing complete!")
-        console.print(f"[cyan]Total chunks extracted: {len(self.chunks)}[/cyan]\n")
-
-    def save_results(self, output_path: str = "parsed_chunks.json"):
+    def save_results(self):
         """Save parsed chunks to JSON"""
-        output_file = Path(output_path)
+        output_path = DATA_DIR / self.project_path.name
+        output_path.mkdir(parents=True, exist_ok=True)
+        output_file = output_path / "chunks.json"
 
         data = {
             "project_path": str(self.project_path),
@@ -327,8 +279,51 @@ class CodeParser:
         console.print(dist_table)
         console.print()
 
-    def save_symbol_index(self, output_path: str = "symbol_index.json"):
+    def save_symbol_index(self):
         """Save symbol index to JSON (from enhanced.py)"""
-        with Path(output_path).open("w", encoding="utf-8") as f:
+        output_path = DATA_DIR / self.project_path.name
+        output_path.mkdir(parents=True, exist_ok=True)
+        output_file = output_path / "symbol_index.json"
+        with Path(output_file).open("w", encoding="utf-8") as f:
             json.dump(self.symbol_index, f, indent=4)
-        console.print(f"[green]✓ Symbol index saved to: {output_path}[/green]")
+        console.print(f"[green]✓ Symbol index saved to: {output_file}[/green]")
+
+    def parse_project(self):
+        """Parse entire project"""
+        console.print(f"Parsing Project: {self.project_path}")
+
+        files = self.discover_files()
+        console.print(f"[green]Found {len(files)} code files[/green]\n")
+        # sys.exit()
+
+        self.symbol_index = {}
+
+        with console.status("[bold green]Parsing files...") as status:
+            for i, file_path in enumerate(files, 1):
+                relative_path = str(file_path.relative_to(self.project_path))
+                status.update(f"[bold green]Parsing {i}/{len(files)}: {relative_path}")
+
+                # Parse the file
+                chunks = self.parse_file(file_path)
+                self.chunks.extend(chunks)
+
+                # Build symbol index for cross-references
+                ctag_symbols = self.run_ctags(file_path)
+                self.stats["ctags_symbols"] += len(ctag_symbols)
+
+                for sym in ctag_symbols:
+                    name = sym["name"]
+                    if name not in self.symbol_index:
+                        self.symbol_index[name] = []
+                    self.symbol_index[name].append({
+                        "file": relative_path,
+                        "line": sym.get("line", sym.get("address", "1")),
+                        "kind": sym.get("kind", "unknown"),
+                        "scope": sym.get("scope", None),
+                        "path": str(file_path),
+                    })
+        self.save_results()
+        self.save_symbol_index()
+        console.print("✓ Parsing complete!")
+        console.print(f"[cyan]Total chunks extracted: {len(self.chunks)}[/cyan]\n")
+        self.visualize_results()
