@@ -1,5 +1,7 @@
+import pathlib
+
 data = {}
-with open("tree_output_css.txt") as f:
+with pathlib.Path("tree_output_css.txt").open() as f:
     lines = f.readlines()
     for line in lines:
         line = line.strip()

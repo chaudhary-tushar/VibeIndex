@@ -43,7 +43,7 @@ def test_save_list_of_documents():
             print(f"✓ Successfully saved list of documents to: {file_path}")
 
             # Read back the file to verify content
-            with open(file_path, encoding="utf-8") as f:
+            with Path(file_path).open(encoding="utf-8") as f:
                 content = f.read()
                 print(f"Content length: {len(content)} characters")
                 print("First 200 characters:", content[:200])
@@ -74,7 +74,7 @@ def test_save_single_document():
             print(f"✓ Successfully saved single document to: {file_path}")
 
             # Read back the file to verify content
-            with open(file_path, encoding="utf-8") as f:
+            with Path(file_path).open(encoding="utf-8") as f:
                 content = f.read()
                 print(f"Content length: {len(content)} characters")
                 print("First 200 characters:", content[:200])
@@ -101,7 +101,7 @@ def test_save_mixed_list():
             print(f"✓ Successfully saved mixed list to: {file_path}")
 
             # Read back the file to verify content
-            with open(file_path, encoding="utf-8") as f:
+            with Path(file_path).open(encoding="utf-8") as f:
                 content = f.read()
                 print(f"Content length: {len(content)} characters")
                 print("Content:", content)

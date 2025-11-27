@@ -142,7 +142,7 @@ def _determine_file_extension(data: Any) -> str:
 
 def _save_json_data(data: Any, file_path: Path) -> None:
     """Save data as JSON format."""
-    with open(file_path, "w", encoding="utf-8") as file:
+    with Path(file_path).open("w", encoding="utf-8") as file:
         if isinstance(data, list):
             # Handle list of items - check if it contains Documents
             if len(data) > 0 and (
@@ -195,7 +195,7 @@ def _save_json_data(data: Any, file_path: Path) -> None:
 
 def _save_csv_data(data: Any, file_path: Path) -> None:
     """Save data as CSV format."""
-    with open(file_path, "w", encoding="utf-8", newline="") as file:
+    with Path(file_path).open("w", encoding="utf-8", newline="") as file:
         if isinstance(data, list) and len(data) > 0:
             if isinstance(data[0], dict):
                 writer = csv.DictWriter(file, fieldnames=data[0].keys())
@@ -211,7 +211,7 @@ def _save_csv_data(data: Any, file_path: Path) -> None:
 
 def _save_txt_data(data: Any, file_path: Path) -> None:
     """Save data as text format."""
-    with open(file_path, "w", encoding="utf-8") as file:
+    with Path(file_path).open("w", encoding="utf-8") as file:
         if isinstance(data, list):
             # Join list items with newlines
             for item in data:
@@ -223,5 +223,5 @@ def _save_txt_data(data: Any, file_path: Path) -> None:
 
 def _save_tree_data(data: Any, file_path: Path) -> None:
     s_expression = data.root_node.sexp()
-    with open(file_path, "w") as f:
+    with Path(file_path).open("w") as f:
         f.write(s_expression)

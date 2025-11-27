@@ -178,7 +178,7 @@ class CodeParser:
         tree: Tree = self._parse_with_tree_sitter(parser, code_bytes, file_path)
         print(dir(tree))
         # print(tree.root_node.)
-        with open("tree_output_css.txt", "w") as f:
+        with Path("tree_output_css.txt").open("w") as f:
 
             def print_tree_to_file(node: Node, indent=0):
                 f.write("  " * indent + node.type + "\n")

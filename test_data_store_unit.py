@@ -40,7 +40,7 @@ def test_save_json_data_with_document_list():
         _save_json_data(docs, tmp_path)
 
         # Read the file back to make sure it saved correctly
-        with open(tmp_path, encoding="utf-8") as f:
+        with Path(tmp_path).open(encoding="utf-8") as f:
             content = f.read()
 
         # Verify content contains expected elements
@@ -68,7 +68,7 @@ def test_save_json_data_with_single_document():
         _save_json_data(doc, tmp_path)
 
         # Read the file back to make sure it saved correctly
-        with open(tmp_path, encoding="utf-8") as f:
+        with Path(tmp_path).open(encoding="utf-8") as f:
             content = f.read()
 
         # Verify content contains expected elements
@@ -96,7 +96,7 @@ def test_save_document_list_integration():
     assert file_path.exists()
 
     # Read and verify content
-    with open(file_path, encoding="utf-8") as f:
+    with Path(file_path).open(encoding="utf-8") as f:
         content = f.read()
 
     # Verify content contains expected elements
