@@ -411,6 +411,7 @@ def ingest(path, output, verbose):
         if output:
             parser.save_results(output)
             click.echo(f"Results saved to: {output}")
+            parser.visualize_results()
         else:
             # Show summary
             click.echo("\nParsed chunks summary:")

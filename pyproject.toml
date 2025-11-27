@@ -29,6 +29,8 @@ dependencies = [
     "langchain>=1.0.8",
     "langchain-ollama>=1.0.0",
     "langchain-openai>=1.0.3",
+    "llama-index>=0.14.8",
+    "sentencepiece>=0.2.1",
 ]
 
 
@@ -62,7 +64,7 @@ exclude = [
     "venv",
     "*/migrations/*.py",
     "staticfiles/*",
-    "tests",
+    "tests/*",
 ]
 # Same as Django: https://github.com/cookiecutter/cookiecutter-django/issues/4792.
 line-length = 120
@@ -132,6 +134,8 @@ ignore = [
   "SIM102", # sometimes it's better to nest
   "PGH004",
   "S324",
+  "PLC0415",
+  "PLR6301",
   "COM812",
   "F541",
 ]

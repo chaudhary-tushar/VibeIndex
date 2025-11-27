@@ -4,20 +4,26 @@ Enhanced with metadata enrichment and visualization from enhanced.py
 """
 
 import json
+import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
+from llama_index.core import SimpleDirectoryReader
 from pathspec import PathSpec
 from pathspec.patterns import GitWildMatchPattern
 from rich.console import Console
 from rich.table import Table
-from tree_sitter import Parser
+from tree_sitter import Parser, Tree
+
+from src.config.data_store import save_data
 
 from .analyzer import Analyzer
 from .chunk import CodeChunk
 from .dependency_mapper import DependencyMapper
 from .language_config import LanguageConfig
 from .metadata_extractor import MetadataExtractor
+from tree_sitter import Node
 
 console = Console()
 
@@ -67,7 +73,7 @@ class CodeParser:
                 else:
                     console.print(f"[yellow]Warning: Language {language} not supported[/yellow]")
                     return None
-            except Exception as e:
+            except OSError as e:
                 console.print(f"[yellow]Warning: Could not load parser for {language}: {e}[/yellow]")
                 return None
         return self.parsers[language]
@@ -75,40 +81,56 @@ class CodeParser:
     def discover_files(self) -> list[Path]:
         """Discover all code files in project"""
         files = []
-
+        # TODO Add metadata to the filpath list like done by SimpleDirectory_reader.
         for ext, lang in LanguageConfig.LANGUAGE_MAP.items():
             for file_path in self.project_path.rglob(f"*{ext}"):
                 if not self._should_ignore(file_path):
                     files.append(file_path)
                     self.stats[f"files_{lang}"] += 1
-
+        save_data(files, method="collecting-reading", ext="txt")
         return files
 
-    def parse_file(self, file_path: Path) -> list[CodeChunk]:
-        """Parse a single file using the appropriate method"""
+    # def discover_files(self) -> list[Path]:
+    #     """Discover all code files in project"""
+    #     files1 = SimpleDirectoryReader(
+    #         input_dir=self.project_path,
+    #         recursive=True,
+    #         )
+    #     files = files1.load_data()
+    #     print(type(files[0]))
+    #     res = files1.list_resources_with_info()
+    #     save_data(files, method="collecting-reading")
+    #     return files
+
+    @staticmethod
+    def _determine_language(file_path: Path) -> tuple[str | None, bytes]:
+        """Determine language and read file content"""
         ext = file_path.suffix
         language = LanguageConfig.LANGUAGE_MAP.get(ext)
-        code_bytes = ""
 
         if not language:
-            return []
-
-        parser = self._get_parser(language)
-        if not parser:
-            return []
+            return None, b""
 
         with Path(file_path).open("rb") as f:
             code_bytes = f.read()
 
+        return language, code_bytes
+
+    @staticmethod
+    def _parse_with_tree_sitter(parser, code_bytes: bytes, file_path: Path) -> list[CodeChunk]:
+        """Parse file content using Tree-sitter"""
         try:
             tree = parser.parse(code_bytes)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             console.print(f"[red]Error parsing {file_path}: {e}[/red]")
             return []
 
-        chunks = []
-        relative_path = str(file_path.relative_to(self.project_path))
+        return tree
 
+    def _get_language_chunks(
+        self, tree, code_bytes: bytes, relative_path: str, language: str, file_path: Path
+    ) -> list[CodeChunk]:
+        """Get chunks based on language"""
         if language == "python":
             # Use specialized Python parsing with libCST for better accuracy
             chunks = self.analyzer.parse_python_file_libcst(file_path)
@@ -121,8 +143,10 @@ class CodeParser:
         else:
             # Fallback for other languages using Tree-sitter
             chunks = self.analyzer.extract_generic_chunks(tree.root_node, code_bytes, relative_path, language)
+        return chunks
 
-        # Enhance all chunks with additional metadata
+    def _enhance_chunks(self, chunks: list[CodeChunk], language: str, file_path: Path):
+        """Enhance all chunks with additional metadata"""
         for chunk in chunks:
             # Add dependencies and references if not already present
             if not chunk.dependencies:
@@ -142,15 +166,49 @@ class CodeParser:
                 all_chunks=self.chunks,
             )
 
+    def parse_file(self, file_path: Path) -> list[CodeChunk]:
+        """Parse a single file using the appropriate method"""
+        language, code_bytes = self._determine_language(file_path)
+
+        if not language:
+            return []
+
+        parser = self._get_parser(language)
+        if not parser:
+            return []
+
+        tree: Tree = self._parse_with_tree_sitter(parser, code_bytes, file_path)
+        print(dir(tree))
+        # print(tree.root_node.)
+        with open("tree_output_css.txt", "w") as f:
+            def print_tree_to_file(node: Node, indent=0):
+                f.write("  " * indent + node.type + "\n")
+                for child in node.children:
+                    print_tree_to_file(child, indent + 1)
+            print_tree_to_file(tree.root_node)
+
+        # Save tree data using the dedicated function
+        save_data(tree.root_node, language=language, method="tree_sitter_parsing")
+
+        if isinstance(tree, list):  # Error occurred
+            return tree
+
+        relative_path = str(file_path.relative_to(self.project_path))
+        chunks = self._get_language_chunks(tree, code_bytes, relative_path, language, file_path)
+
+        # Enhance all chunks with additional metadata
+        self._enhance_chunks(chunks, language, file_path)
+
         return chunks
 
-    def run_ctags(self, file_path: Path) -> list[dict]:
+    @staticmethod
+    def run_ctags(file_path: Path) -> list[dict]:
         """Extract symbols using universal-ctags"""
         try:
-            import subprocess
+            import subprocess  # noqa: S404
 
-            result = subprocess.run(
-                ["ctags", "-f", "-", "--output-format=json", str(file_path)],
+            result = subprocess.run(  # noqa: S603
+                ["ctags", "-f", "-", "--output-format=json", str(file_path)],  # noqa: S607
                 check=False,
                 capture_output=True,
                 text=True,
@@ -181,6 +239,7 @@ class CodeParser:
 
         files = self.discover_files()
         console.print(f"[green]Found {len(files)} code files[/green]\n")
+        # sys.exit()
 
         self.symbol_index = {}
 
@@ -270,6 +329,6 @@ class CodeParser:
 
     def save_symbol_index(self, output_path: str = "symbol_index.json"):
         """Save symbol index to JSON (from enhanced.py)"""
-        with Path(output_path).open("w") as f:
+        with Path(output_path).open("w", encoding="utf-8") as f:
             json.dump(self.symbol_index, f, indent=4)
         console.print(f"[green]✓ Symbol index saved to: {output_path}[/green]")

@@ -6,7 +6,10 @@ dist/
 wheels/
 *.egg-info
 .coverage
+data/*
 .pytest_cache/
+chunks.json
+tree_output_*.txt
 
 # Virtual environments
 .venv

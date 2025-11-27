@@ -1,3 +1,4 @@
+# ruff :noqa
 """
 Code analysis and parsing logic for different languages
 """
@@ -19,11 +20,12 @@ class Analyzer:
     """Handles code analysis and parsing for different languages"""
 
     def extract_js_chunks(self, node: Node, code_bytes: bytes, relative_path: str, language: str) -> list[CodeChunk]:
-        """Extracts functions and classes from JavaScript/TypeScript"""
+        """Extracts functions, classes, and other significant chunks from JavaScript/TypeScript"""
         chunks = []
 
-        def traverse(node, parent_name=None):
-            if node.type in ["function_definition", "function_declaration"]:
+        def traverse(node: Node , parent_name=None):
+            # Handle function declarations and expressions
+            if node.type in {"function_declaration", "function_expression", "generator_function", "generator_function_declaration"}:
                 name_node = node.child_by_field_name("name")
                 if name_node:
                     name = code_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8")
@@ -47,8 +49,33 @@ class Analyzer:
                         references=called_symbols,
                     )
                     chunks.append(chunk)
+                else:
+                    # Handle anonymous functions
+                    start_line = node.start_point[0] + 1
+                    end_line = node.end_point[0] + 1
+                    code = code_bytes[node.start_byte : node.end_byte].decode("utf-8")
+                    called_symbols = self.find_called_symbols(code, language, {})
 
-            elif node.type in ["class_definition", "class_declaration"]:
+                    chunk = CodeChunk(
+                        type="anonymous_function",
+                        name=f"anonymous_func_{start_line}_{end_line}",
+                        code=code,
+                        file_path=relative_path,
+                        language=language,
+                        start_line=start_line,
+                        end_line=end_line,
+                        docstring=None,
+                        signature=code.split("\n")[0],
+                        complexity=self._calculate_complexity(code),
+                        dependencies=self._extract_dependencies(code, language),
+                        parent=parent_name,
+                        defines=[],
+                        references=called_symbols,
+                    )
+                    chunks.append(chunk)
+
+            # Handle class declarations and expressions
+            elif node.type in {"class", "class_declaration", "class_expression"}:
                 name_node = node.child_by_field_name("name")
                 if name_node:
                     name = code_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8")
@@ -74,16 +101,24 @@ class Analyzer:
                     for child in node.children:
                         traverse(child, parent_name=name)
 
-            # Handle method_definition nodes (for methods within classes)
-            elif node.type == "method_definition":
+            # Handle method definitions (including getters/setters)
+            elif node.type in {"method_definition", "public_field_definition", "private_field_definition"}:
                 name_node = node.child_by_field_name("name")
                 if name_node:
                     name = code_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8")
                     code = code_bytes[node.start_byte : node.end_byte].decode("utf-8")
                     called_symbols = self.find_called_symbols(code, language, {})
 
+                    chunk_type = "method"
+                    if node.type == "public_field_definition" or node.type == "private_field_definition":
+                        chunk_type = "property"
+                    elif name.startswith("get "):
+                        chunk_type = "getter"
+                    elif name.startswith("set "):
+                        chunk_type = "setter"
+
                     chunk = CodeChunk(
-                        type="method",
+                        type=chunk_type,
                         name=name,
                         code=code,
                         file_path=relative_path,
@@ -99,6 +134,80 @@ class Analyzer:
                         references=called_symbols,
                     )
                     chunks.append(chunk)
+
+            # Handle variable declarations (for important constants/objects)
+            elif node.type in {"variable_declaration", "lexical_declaration"}:
+                # Process each declarator in the declaration
+                for child in node.children:
+                    if child.type in ["variable_declarator"]:
+                        name_node = child.child_by_field_name("name")
+                        if name_node:
+                            name = code_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8")
+                            value_node = child.child_by_field_name("value")
+                            if value_node:
+                                code = code_bytes[value_node.start_byte : value_node.end_byte].decode("utf-8")
+                                # Only chunk objects, functions, and arrays that are significant
+                                if value_node.type in ["object", "array", "arrow_function", "function", "class"]:
+                                    called_symbols = self.find_called_symbols(code, language, {})
+                                    chunk = CodeChunk(
+                                        type="variable",
+                                        name=name,
+                                        code=code,
+                                        file_path=relative_path,
+                                        language=language,
+                                        start_line=value_node.start_point[0] + 1,
+                                        end_line=value_node.end_point[0] + 1,
+                                        docstring=None,
+                                        signature=f"const {name} = ...",
+                                        complexity=self._calculate_complexity(code),
+                                        dependencies=self._extract_dependencies(code, language),
+                                        parent=parent_name,
+                                        defines=[name],
+                                        references=called_symbols,
+                                    )
+                                    chunks.append(chunk)
+
+            # Handle import statements
+            elif node.type in ["import_statement", "import_declaration"]:
+                code = code_bytes[node.start_byte : node.end_byte].decode("utf-8")
+                chunk = CodeChunk(
+                    type="import",
+                    name=code.strip(),
+                    code=code,
+                    file_path=relative_path,
+                    language=language,
+                    start_line=node.start_point[0] + 1,
+                    end_line=node.end_point[0] + 1,
+                    docstring=None,
+                    signature=code.split("\n")[0],
+                    complexity=0,  # Imports don't add complexity
+                    dependencies=[],
+                    parent=parent_name,
+                    defines=[],  # Imports don't define new symbols in the same file
+                    references=[],  # References are resolved during indexing
+                )
+                chunks.append(chunk)
+
+            # Handle export statements
+            elif node.type in {"export_statement", "export_declaration"}:
+                code = code_bytes[node.start_byte : node.end_byte].decode("utf-8")
+                chunk = CodeChunk(
+                    type="export",
+                    name=code.strip(),
+                    code=code,
+                    file_path=relative_path,
+                    language=language,
+                    start_line=node.start_point[0] + 1,
+                    end_line=node.end_point[0] + 1,
+                    docstring=None,
+                    signature=code.split("\n")[0],
+                    complexity=0,
+                    dependencies=[],
+                    parent=parent_name,
+                    defines=[],  # Exports don't define new symbols
+                    references=[],  # References are resolved during indexing
+                )
+                chunks.append(chunk)
 
             for child in node.children:
                 traverse(child, parent_name)
@@ -170,13 +279,20 @@ class Analyzer:
         """Extract chunks from CSS"""
         chunks = []
 
-        def walk(n):
-            if n.type == "rule_set":
+        def walk(n: Node):
+            if n.type in {"rule_set", "at_rule", "keyframes_statement"}:
                 code = code_bytes[n.start_byte : n.end_byte].decode("utf8")
                 # Extract selector as name
-                selector_node = n.child_by_field_name("selectors")
+                # selector_node = n.child_by_field_name("selectors")
+                selector_node = ""
+                for child in n.children:
+                    if child.type == "selectors":
+                        selector_node = child
+                    elif child.type == "at_keyword":
+                        selector_node = child
                 name = "unknown_selector"
                 if selector_node:
+                    print("here", end="*")
                     name = code_bytes[selector_node.start_byte : selector_node.end_byte].decode("utf8").strip()
                 called_symbols = self.find_called_symbols(code, language, {})
 

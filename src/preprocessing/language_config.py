@@ -18,18 +18,6 @@ class LanguageConfig:
         ".mjs": "javascript",
         ".css": "css",
         ".html": "html",
-        ".java": "java",
-        ".cpp": "cpp",
-        ".cc": "cpp",
-        ".cxx": "cpp",
-        ".c": "c",
-        ".h": "c",
-        ".hpp": "cpp",
-        ".go": "go",
-        ".rs": "rust",
-        ".rb": "ruby",
-        ".php": "php",
-        ".cs": "c_sharp",
     }
 
     LANGUAGES = {
