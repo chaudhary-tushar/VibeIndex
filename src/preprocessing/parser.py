@@ -4,17 +4,16 @@ Enhanced with metadata enrichment and visualization from enhanced.py
 """
 
 import json
-import sys
-import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-from llama_index.core import SimpleDirectoryReader
 from pathspec import PathSpec
 from pathspec.patterns import GitWildMatchPattern
 from rich.console import Console
 from rich.table import Table
-from tree_sitter import Parser, Tree
+from tree_sitter import Node
+from tree_sitter import Parser
+from tree_sitter import Tree
 
 from src.config.data_store import save_data
 
@@ -23,7 +22,6 @@ from .chunk import CodeChunk
 from .dependency_mapper import DependencyMapper
 from .language_config import LanguageConfig
 from .metadata_extractor import MetadataExtractor
-from tree_sitter import Node
 
 console = Console()
 
@@ -181,10 +179,12 @@ class CodeParser:
         print(dir(tree))
         # print(tree.root_node.)
         with open("tree_output_css.txt", "w") as f:
+
             def print_tree_to_file(node: Node, indent=0):
                 f.write("  " * indent + node.type + "\n")
                 for child in node.children:
                     print_tree_to_file(child, indent + 1)
+
             print_tree_to_file(tree.root_node)
 
         # Save tree data using the dedicated function

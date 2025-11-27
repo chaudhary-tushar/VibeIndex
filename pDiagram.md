@@ -14,17 +14,17 @@ graph TD
     J --> K[Analyzer.enhance_chunk_completely]
     K --> L[CodeParser.run_ctags]
     B --> M[CodeParser.save_results]
-    
+
     N[cli.preprocess] --> O[ChunkPreprocessor.process]
     O --> P[ChunkPreprocessor.deduplicate]
     O --> Q[ChunkPreprocessor.enhance_chunk]
     O --> R[ChunkPreprocessor.validate_chunk]
-    
+
     S[cli.embed] --> T[EmbeddingGenerator.generate_all]
     T --> U[EmbeddingGenerator.generate_batch]
     U --> V[EmbeddingGenerator.generate_embedding_ollama]
     V --> W[EmbeddingGenerator.validate_embedding_quality]
-    
+
     X[cli.index] --> Y[QdrantIndexer.index_chunks]
     Y --> Z[QdrantIndexer._get_collection_for_chunk]
     Z --> AA[QdrantIndexer._prepare_payload]
@@ -32,22 +32,22 @@ graph TD
     AB --> AC[QdrantIndexer.optimize_batch_size]
     AB --> Y
     Y --> AD[QdrantClient.upsert]
-    
+
     AE[cli.index_embedded] --> AF[index_from_embedded_json]
     AF --> AG[QdrantIndexer.create_collections]
     AF --> AH[QdrantIndexer.index_chunks]
-    
+
     AI[cli.hybrid_setup] --> AJ[setup_hybrid_collection]
     AJ --> AK[BM25SparseEncoder.build_vocab_from_texts]
     AK --> AL[HybridSearchEngine.create_hybrid_collection]
     AL --> AM[HybridSearchEngine.reindex_with_sparse_vectors]
-    
+
     AN[cli.rag] --> AO[CodeRAG_2.query_codebase]
     AO --> AP[EmbeddingGenerator.generate_embedding_ollama]
     AP --> AQ[QdrantIndexer.client.search]
     AQ --> AR[CodeRAG_2._build_rag_prompt]
     AR --> AS[CodeRAG_2._ask_llm]
-    
+
     AT[cli.advanced_rag] --> AU[CompleteRetrievalSystem.retrieve]
     AU --> AV[HybridSearchEngine.hybrid_search]
     AV --> AW[InitialCandidateSelector.select_candidates]

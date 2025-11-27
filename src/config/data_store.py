@@ -1,11 +1,10 @@
-from pathlib import Path
-import json
 import csv
-import sqlite3
-from typing import Any, Union, Dict, List
+import json
+from pathlib import Path
+from typing import Any
+
 from llama_index.core import Document
 from tree_sitter import Tree
-
 
 BASE_PATH = Path(__file__).parent.parent.parent
 DATA_DIR = BASE_PATH / "data"
@@ -97,19 +96,20 @@ def _determine_file_extension(data: Any) -> str:
         return ".sexp"
     if isinstance(data, dict):
         return "json"
-    elif isinstance(data, list):
+    if isinstance(data, list):
         # If it's a list, check the first element to determine the appropriate extension
         if len(data) > 0:
             first_element = data[0]
             # If the list contains Documents, use JSON
-            if isinstance(first_element, Document) or (hasattr(first_element, '__class__') and 'Document' in first_element.__class__.__name__):
+            if (
+                isinstance(first_element, Document)
+                or (hasattr(first_element, "__class__") and "Document" in first_element.__class__.__name__)
+                or isinstance(first_element, dict)
+            ):
                 return "json"
-            # Otherwise, determine from the first element
-            elif isinstance(first_element, dict):
-                return "json"
-            elif isinstance(first_element, str):
+            if isinstance(first_element, str):
                 # For strings, check if it looks like structured data
-                if first_element.strip().startswith(('{', '[')):
+                if first_element.strip().startswith(("{", "[")):
                     try:
                         # Try to parse as JSON
                         json.loads(first_element)
@@ -117,20 +117,18 @@ def _determine_file_extension(data: Any) -> str:
                     except json.JSONDecodeError:
                         pass
                 return "txt"
-            else:
-                return "json"  # Default to JSON for lists of other types
-        else:
-            # Empty list, default to JSON
-            return "json"
-    elif isinstance(data, Document) or (hasattr(data, '__class__') and 'Document' in data.__class__.__name__):
+            return "json"  # Default to JSON for lists of other types
+        # Empty list, default to JSON
+        return "json"
+    if isinstance(data, Document) or (hasattr(data, "__class__") and "Document" in data.__class__.__name__):
         # Check if it's a LlamaIndex Document
         return "json"
-    elif hasattr(data, '__class__') and data.__class__.__name__ in ['Tree', 'Node', 'tree_sitter']:
+    if hasattr(data, "__class__") and data.__class__.__name__ in ["Tree", "Node", "tree_sitter"]:
         # Tree-sitter related objects
         return "txt"
-    elif isinstance(data, str):
+    if isinstance(data, str):
         # For strings, check if it looks like structured data
-        if data.strip().startswith(('{', '[')):
+        if data.strip().startswith(("{", "[")):
             try:
                 # Try to parse as JSON
                 json.loads(data)
@@ -138,9 +136,8 @@ def _determine_file_extension(data: Any) -> str:
             except json.JSONDecodeError:
                 pass
         return "txt"
-    else:
-        # Default to txt for other data types
-        return "txt"
+    # Default to txt for other data types
+    return "txt"
 
 
 def _save_json_data(data: Any, file_path: Path) -> None:
@@ -148,21 +145,23 @@ def _save_json_data(data: Any, file_path: Path) -> None:
     with open(file_path, "w", encoding="utf-8") as file:
         if isinstance(data, list):
             # Handle list of items - check if it contains Documents
-            if len(data) > 0 and (isinstance(data[0], Document) or
-                                  (hasattr(data[0], '__class__') and 'Document' in data[0].__class__.__name__)):
+            if len(data) > 0 and (
+                isinstance(data[0], Document)
+                or (hasattr(data[0], "__class__") and "Document" in data[0].__class__.__name__)
+            ):
                 # Convert each Document in the list to a dictionary
                 serialized_data = []
                 for item in data:
-                    if hasattr(item, 'to_dict') and callable(getattr(item, 'to_dict')):
+                    if hasattr(item, "to_dict") and callable(item.to_dict):
                         serialized_data.append(item.to_dict())
                     elif isinstance(item, Document):
                         serialized_data.append({
-                            'text': item.text,
-                            'doc_id': item.doc_id,
-                            'embedding': item.embedding,
-                            'metadata': item.metadata,
-                            'excluded_embed_metadata_keys': item.excluded_embed_metadata_keys,
-                            'excluded_llm_metadata_keys': item.excluded_llm_metadata_keys,
+                            "text": item.text,
+                            "doc_id": item.doc_id,
+                            "embedding": item.embedding,
+                            "metadata": item.metadata,
+                            "excluded_embed_metadata_keys": item.excluded_embed_metadata_keys,
+                            "excluded_llm_metadata_keys": item.excluded_llm_metadata_keys,
                         })
                     else:
                         # If it's a list that doesn't contain Documents, save as is
@@ -171,19 +170,24 @@ def _save_json_data(data: Any, file_path: Path) -> None:
             else:
                 # Handle regular list that doesn't contain Documents
                 json.dump(data, file, indent=4, ensure_ascii=False)
-        elif hasattr(data, 'to_dict') and callable(getattr(data, 'to_dict')):
+        elif hasattr(data, "to_dict") and callable(data.to_dict):
             # Handle LlamaIndex Document or objects with to_dict method
             json.dump(data.to_dict(), file, indent=4, ensure_ascii=False)
         elif isinstance(data, Document):
             # Handle LlamaIndex Documents specifically
-            json.dump({
-                'text': data.text,
-                'doc_id': data.doc_id,
-                'embedding': data.embedding,
-                'metadata': data.metadata,
-                'excluded_embed_metadata_keys': data.excluded_embed_metadata_keys,
-                'excluded_llm_metadata_keys': data.excluded_llm_metadata_keys,
-            }, file, indent=4, ensure_ascii=False)
+            json.dump(
+                {
+                    "text": data.text,
+                    "doc_id": data.doc_id,
+                    "embedding": data.embedding,
+                    "metadata": data.metadata,
+                    "excluded_embed_metadata_keys": data.excluded_embed_metadata_keys,
+                    "excluded_llm_metadata_keys": data.excluded_llm_metadata_keys,
+                },
+                file,
+                indent=4,
+                ensure_ascii=False,
+            )
         else:
             # Handle regular dict data
             json.dump(data, file, indent=4, ensure_ascii=False)
@@ -191,7 +195,7 @@ def _save_json_data(data: Any, file_path: Path) -> None:
 
 def _save_csv_data(data: Any, file_path: Path) -> None:
     """Save data as CSV format."""
-    with open(file_path, "w", encoding="utf-8", newline='') as file:
+    with open(file_path, "w", encoding="utf-8", newline="") as file:
         if isinstance(data, list) and len(data) > 0:
             if isinstance(data[0], dict):
                 writer = csv.DictWriter(file, fieldnames=data[0].keys())
@@ -211,7 +215,7 @@ def _save_txt_data(data: Any, file_path: Path) -> None:
         if isinstance(data, list):
             # Join list items with newlines
             for item in data:
-                file.write(f"{str(item)}\n")
+                file.write(f"{item!s}\n")
         else:
             # Convert to string
             file.write(str(data))

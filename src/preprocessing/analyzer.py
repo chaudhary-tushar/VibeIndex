@@ -23,9 +23,14 @@ class Analyzer:
         """Extracts functions, classes, and other significant chunks from JavaScript/TypeScript"""
         chunks = []
 
-        def traverse(node: Node , parent_name=None):
+        def traverse(node: Node, parent_name=None):
             # Handle function declarations and expressions
-            if node.type in {"function_declaration", "function_expression", "generator_function", "generator_function_declaration"}:
+            if node.type in {
+                "function_declaration",
+                "function_expression",
+                "generator_function",
+                "generator_function_declaration",
+            }:
                 name_node = node.child_by_field_name("name")
                 if name_node:
                     name = code_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8")
