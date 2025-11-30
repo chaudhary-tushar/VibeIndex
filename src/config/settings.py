@@ -1,4 +1,6 @@
-from pydantic import BaseSettings
+from pathlib import Path
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -8,6 +10,8 @@ class Settings(BaseSettings):
     embedding_model_name: str
     embedding_dim: int
     generation_model_name: str
+
+    project_path: Path | None = None
 
     class Config:
         env_file = ".env"

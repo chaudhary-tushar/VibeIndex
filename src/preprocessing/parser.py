@@ -14,6 +14,7 @@ from rich.table import Table
 from tree_sitter import Parser
 from tree_sitter import Tree
 
+from src.config import settings
 from src.config.data_store import DATA_DIR
 from src.config.data_store import save_data
 
@@ -30,7 +31,7 @@ class CodeParser:
     """Main parser using Tree-sitter for multiple languages"""
 
     def __init__(self, project_path: str):
-        self.project_path = Path(project_path).resolve()
+        self.project_path = settings.project_path
         self.parsers = {}
         self.chunks: list[CodeChunk] = []
         self.stats = defaultdict(int)
@@ -131,7 +132,7 @@ class CodeParser:
         """Get chunks based on language"""
         if language == "python":
             # Use specialized Python parsing with libCST for better accuracy
-            chunks = self.analyzer.parse_python_file_libcst(file_path)
+            chunks = self.analyzer.parse_python_file_libcst(file_path, self.symbol_index)
         elif language == "javascript":
             chunks = self.analyzer.extract_js_chunks(tree.root_node, code_bytes, relative_path, language)
         elif language == "html":
@@ -184,7 +185,7 @@ class CodeParser:
         relative_path = str(file_path.relative_to(self.project_path))
         chunks = self._get_language_chunks(tree, code_bytes, relative_path, language, file_path)
 
-        # Enhance all chunks with additional metadata
+        # Enhance all chunks with additional metadata #TODO send tree.root.node along
         self._enhance_chunks(chunks, language, file_path)
 
         return chunks
@@ -196,7 +197,7 @@ class CodeParser:
             import subprocess  # noqa: S404
 
             result = subprocess.run(  # noqa: S603
-                ["ctags", "-f", "-", "--output-format=json", str(file_path)],  # noqa: S607
+                ["ctags", "-f", "-", "--output-format=json", "--fields=+S+P+k+p+K+t+s+i+an", str(file_path)],  # noqa: S607
                 check=False,
                 capture_output=True,
                 text=True,
@@ -297,6 +298,25 @@ class CodeParser:
         # sys.exit()
 
         self.symbol_index = {}
+        for file_path in files:
+            relative_path = str(file_path.relative_to(self.project_path))
+            # Build symbol index for cross-references
+            ctag_symbols = self.run_ctags(file_path)
+            if len(ctag_symbols) > 0:
+                save_data(ctag_symbols, method="ct_symbols")
+            self.stats["ctags_symbols"] += len(ctag_symbols)
+
+            for sym in ctag_symbols:
+                name = sym["name"]
+                if name not in self.symbol_index:
+                    self.symbol_index[name] = []
+                self.symbol_index[name].append({
+                    "file": relative_path,
+                    "line": sym.get("line", sym.get("address", "1")),
+                    "kind": sym.get("kind", "unknown"),
+                    "scope": sym.get("scope", None),
+                    "path": str(file_path),
+                })
 
         with console.status("[bold green]Parsing files...") as status:
             for i, file_path in enumerate(files, 1):
@@ -307,21 +327,6 @@ class CodeParser:
                 chunks = self.parse_file(file_path)
                 self.chunks.extend(chunks)
 
-                # Build symbol index for cross-references
-                ctag_symbols = self.run_ctags(file_path)
-                self.stats["ctags_symbols"] += len(ctag_symbols)
-
-                for sym in ctag_symbols:
-                    name = sym["name"]
-                    if name not in self.symbol_index:
-                        self.symbol_index[name] = []
-                    self.symbol_index[name].append({
-                        "file": relative_path,
-                        "line": sym.get("line", sym.get("address", "1")),
-                        "kind": sym.get("kind", "unknown"),
-                        "scope": sym.get("scope", None),
-                        "path": str(file_path),
-                    })
         self.save_results()
         self.save_symbol_index()
         console.print("✓ Parsing complete!")

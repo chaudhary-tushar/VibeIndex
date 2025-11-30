@@ -6,8 +6,10 @@ Code analysis and parsing logic for different languages
 import hashlib
 import re
 from pathlib import Path
+from src.config import settings
 
 import libcst as cst
+from radon.visitors import ComplexityVisitor
 from rich.console import Console
 from tree_sitter import Node
 
@@ -47,7 +49,7 @@ class Analyzer:
                         end_line=node.end_point[0] + 1,
                         docstring=None,  # JS doesn't have standard docstrings like Python
                         signature=code.split("\n")[0],
-                        complexity=self._calculate_complexity(code),
+                        complexity=self._calculate_complexity(code, language),
                         dependencies=self._extract_dependencies(code, language),
                         parent=parent_name,
                         defines=[name],
@@ -71,7 +73,7 @@ class Analyzer:
                         end_line=end_line,
                         docstring=None,
                         signature=code.split("\n")[0],
-                        complexity=self._calculate_complexity(code),
+                        complexity=self._calculate_complexity(code, language),
                         dependencies=self._extract_dependencies(code, language),
                         parent=parent_name,
                         defines=[],
@@ -95,7 +97,7 @@ class Analyzer:
                         start_line=node.start_point[0] + 1,
                         end_line=node.end_point[0] + 1,
                         docstring=None,
-                        complexity=self._calculate_complexity(code),
+                        complexity=self._calculate_complexity(code, language),
                         dependencies=self._extract_dependencies(code, language),
                         defines=[name],
                         references=called_symbols,
@@ -132,7 +134,7 @@ class Analyzer:
                         end_line=node.end_point[0] + 1,
                         docstring=None,
                         signature=code.split("\n")[0],
-                        complexity=self._calculate_complexity(code),
+                        complexity=self._calculate_complexity(code, language),
                         dependencies=self._extract_dependencies(code, language),
                         parent=parent_name,  # Parent will be set by the recursive call
                         defines=[name],
@@ -164,7 +166,7 @@ class Analyzer:
                                         end_line=value_node.end_point[0] + 1,
                                         docstring=None,
                                         signature=f"const {name} = ...",
-                                        complexity=self._calculate_complexity(code),
+                                        complexity=self._calculate_complexity(code, language),
                                         dependencies=self._extract_dependencies(code, language),
                                         parent=parent_name,
                                         defines=[name],
@@ -225,6 +227,7 @@ class Analyzer:
         chunks = []
 
         def walk(n):
+            # TODO find if tree-sitter-html even outputs .child_by_field_name method
             if n.type == "element":
                 tag_name_node = n.child_by_field_name("tag_name")
                 if tag_name_node:
@@ -352,7 +355,7 @@ class Analyzer:
             )
         ]
 
-    def parse_python_file_libcst(self, file_path: Path) -> list[CodeChunk]:
+    def parse_python_file_libcst(self, file_path: Path, symbol_index: dict) -> list[CodeChunk]:
         """Parse Python file using libCST for better accuracy"""
         if file_path.suffix != ".py":
             return []
@@ -370,13 +373,13 @@ class Analyzer:
             console.print(f"[yellow]LibCST parse error for {file_path}: {e}[/yellow]")
             return []
 
-        relative_path = str(file_path.relative_to(file_path.parents[3]))  # Go up to project root
+        relative_path = str(file_path.relative_to(settings.project_path))  # Go up to project root
         # chunks = []
 
         class FunctionVisitor(cst.CSTVisitor):
             METADATA_DEPENDENCIES = (PositionProvider,)
 
-            def __init__(self, analyzer_instance):
+            def __init__(self, analyzer_instance: Analyzer):
                 self.chunks = []
                 self.current_class = None
                 self.analyzer = analyzer_instance
@@ -387,7 +390,10 @@ class Analyzer:
             def leave_ClassDef(self, original_node: cst.ClassDef):
                 start_line, end_line = self._get_position(original_node)
                 code_block = module.code_for_node(original_node)
-                called_symbols = self.analyzer.find_called_symbols(code_block, "python", {})
+                called_symbols = self.analyzer.find_called_symbols(code_block, "python", symbol_index)
+
+                # Build class signature
+                signature = self._get_class_signature(original_node)
 
                 chunk = CodeChunk(
                     type="class",
@@ -399,7 +405,8 @@ class Analyzer:
                     end_line=end_line,
                     docstring=self._get_docstring(original_node),
                     dependencies=self.analyzer._extract_dependencies(code_block, language="python"),
-                    complexity=self._calculate_complexity(code_block),
+                    signature=signature,
+                    complexity=self.analyzer._calculate_complexity(code_block, language="python"),
                     defines=[original_node.name.value],
                     references=called_symbols,
                 )
@@ -410,6 +417,9 @@ class Analyzer:
                 start_line, end_line = self._get_position(original_node)
                 code_block = module.code_for_node(original_node)
                 called_symbols = self.analyzer.find_called_symbols(code_block, "python", {})
+
+                # Build more accurate function signature
+                signature = self._get_function_signature(original_node)
                 chunk = CodeChunk(
                     type="method" if self.current_class else "function",
                     name=original_node.name.value,
@@ -420,8 +430,8 @@ class Analyzer:
                     end_line=end_line,
                     docstring=self._get_docstring(original_node),
                     dependencies=self.analyzer._extract_dependencies(code_block, language="python"),
-                    signature=code_block.split("\n")[0],
-                    complexity=self._calculate_complexity(code_block),
+                    signature=signature,
+                    complexity=self.analyzer._calculate_complexity(code_block, language="python"),
                     parent=self.current_class,
                     defines=[original_node.name.value],
                     references=called_symbols,
@@ -433,23 +443,213 @@ class Analyzer:
                 return pos.start.line, pos.end.line
 
             def _get_docstring(self, node) -> str | None:
-                if hasattr(node, "body") and isinstance(node.body, cst.IndentedBlock):
-                    if node.body.body:
-                        first = node.body.body[0]
-                        if isinstance(first, cst.SimpleStatementLine):
-                            for stmt in first.body:
-                                if isinstance(stmt, cst.Expr) and isinstance(stmt.value, cst.BaseString):
-                                    # Handle f-strings, raw strings, etc.
-                                    value = stmt.value.evaluated_value
-                                    if value is not None:
-                                        return value.strip()
+                """
+                Extract docstring from a function or class node.
+                Handles various string types and improves detection of docstrings.
+                """
+                if not hasattr(node, "body"):
+                    return None
+
+                # Get the first statement in the body
+                body = node.body
+                if isinstance(body, cst.IndentedBlock):
+                    statements = body.body
+                elif isinstance(body, (list, tuple)):
+                    statements = body
+                else:
+                    return None
+
+                if not statements:
+                    return None
+
+                first_stmt = statements[0]
+
+                # Handle SimpleStatementLine containing the docstring
+                if isinstance(first_stmt, cst.SimpleStatementLine):
+                    for expr in first_stmt.body:
+                        docstring = self._extract_docstring_from_expr(expr)
+                        if docstring:
+                            return docstring.strip()
+                else:
+                    # Handle direct expressions in the body
+                    docstring = self._extract_docstring_from_expr(first_stmt)
+                    if docstring:
+                        return docstring.strip()
+
                 return None
 
-            def _calculate_complexity(self, code: str) -> int:
-                complexity = 1
-                for keyword in ["if ", "elif ", "else", "for ", "while ", " and ", " or ", "except ", "case "]:
-                    complexity += code.count(keyword)
-                return complexity
+            def _extract_docstring_from_expr(self, expr) -> str | None:
+                """
+                Extract docstring from an expression node.
+                """
+                if not isinstance(expr, cst.Expr):
+                    return None
+
+                value = expr.value
+                # Handle different types of string literals
+                if isinstance(value, cst.SimpleString):
+                    # For regular strings, f-strings, raw strings, etc.
+                    try:
+                        # Use evaluated_value to get the actual string content
+                        docstring = value.evaluated_value
+                        if docstring is not None:
+                            return docstring
+                    except Exception:
+                        # If evaluated_value fails, try raw value
+                        raw_value = value.value
+                        # Remove string delimiters to get content
+                        if len(raw_value) >= 2:
+                            return raw_value[1:-1]  # Remove first and last characters (quotes)
+                elif isinstance(value, cst.ConcatenatedString):
+                    # Handle concatenated strings
+                    parts = []
+                    for part in [value.left, value.right]:
+                        if isinstance(part, cst.SimpleString):
+                            try:
+                                evaluated = part.evaluated_value
+                                if evaluated is not None:
+                                    parts.append(evaluated)
+                            except Exception:
+                                continue
+                    if parts:
+                        return "".join(parts)
+
+                return None
+
+            def _get_function_signature(self, node: cst.FunctionDef) -> str:
+                """
+                Extract and build a function signature from its definition.
+                """
+                # Start with def keyword and function name
+                name = node.name.value
+                parameters = self._get_parameters_str(node.params)
+
+                # Handle return annotation if present
+                return_annotation = ""
+                if node.returns:
+                    print("checking if node retuens")
+                    try:
+                        return_annotation = f" -> {module.code_for_node(node.returns)}"
+                    except:
+                        return_annotation = ""
+
+                return f"def {name}{parameters}{return_annotation}:"
+
+            def _get_parameters_str(self, params: cst.Parameters) -> str:
+                """
+                Convert function parameters to string representation.
+                """
+                param_strings = []
+
+                # Handle regular parameters
+                for param in params.params:
+                    # Check if param is a sentinel value
+                    if isinstance(param, cst.Param):
+                        # Get parameter name - it could be a string directly or a Name node
+                        if isinstance(param.name, str):
+                            param_str = param.name
+                        else:
+                            param_str = param.name.value
+
+                        # Add type annotation if present
+                        if param.annotation and not isinstance(param.annotation, cst.MaybeSentinel):
+                            try:
+                                param_str += f": {module.code_for_node(param.annotation)}"
+                            except:
+                                pass
+
+                        # Add default value if present
+                        if param.default:
+                            try:
+                                param_str += f" = {module.code_for_node(param.default)}"
+                            except:
+                                pass
+
+                        param_strings.append(param_str)
+
+                # Handle star args (*args)
+                if params.star_arg and not isinstance(params.star_arg, cst.MaybeSentinel):
+                    star_arg = params.star_arg
+                    # Handle star_arg name
+                    if isinstance(star_arg.name, str):
+                        star_str = f"*{star_arg.name}"
+                    else:
+                        star_str = f"*{star_arg.name.value}"
+
+                    if star_arg.annotation and not isinstance(star_arg.annotation, cst.MaybeSentinel):
+                        try:
+                            star_str += f": {module.code_for_node(star_arg.annotation)}"
+                        except:
+                            pass
+                    param_strings.append(star_str)
+
+                # Handle keyword-only parameters
+                for param in params.kwonly_params:
+                    if isinstance(param, cst.Param):
+                        # Get parameter name
+                        if isinstance(param.name, str):
+                            param_str = param.name
+                        else:
+                            param_str = param.name.value
+
+                        # Add type annotation if present
+                        if param.annotation and not isinstance(param.annotation, cst.MaybeSentinel):
+                            try:
+                                param_str += f": {module.code_for_node(param.annotation)}"
+                            except:
+                                pass
+
+                        # Add default value if present
+                        if param.default:
+                            try:
+                                param_str += f" = {module.code_for_node(param.default)}"
+                            except:
+                                pass
+
+                        param_strings.append(param_str)
+
+                # Handle double-star args (**kwargs)
+                if params.star_kwarg and not isinstance(params.star_kwarg, cst.MaybeSentinel):
+                    star_kwarg = params.star_kwarg
+                    # Handle star_kwarg name
+                    if isinstance(star_kwarg.name, str):
+                        star_str = f"**{star_kwarg.name}"
+                    else:
+                        star_str = f"**{star_kwarg.name.value}"
+
+                    if star_kwarg.annotation and not isinstance(star_kwarg.annotation, cst.MaybeSentinel):
+                        try:
+                            star_str += f": {module.code_for_node(star_kwarg.annotation)}"
+                        except:
+                            pass
+                    param_strings.append(star_str)
+
+                return f"({', '.join(param_strings)})"
+
+            def _get_class_signature(self, node: cst.ClassDef) -> str:
+                """
+                Extract and build a class signature from its definition.
+                """
+                # Start with class keyword and class name
+                name = node.name.value
+
+                # Extract base classes if any
+                base_classes = []
+                if node.bases:
+                    for base in node.bases:
+                        try:
+                            base_class_str = module.code_for_node(base.value)
+                            base_classes.append(base_class_str)
+                        except:
+                            continue
+
+                # Build the signature string
+                if base_classes:
+                    bases_str = f"({', '.join(base_classes)})"
+                else:
+                    bases_str = "()"
+
+                return f"class {name}{bases_str}:"
 
         visitor = FunctionVisitor(self)
         wrapper.visit(visitor)
@@ -487,14 +687,57 @@ class Analyzer:
 
         return sorted(references)
 
-    def _calculate_complexity(self, code: str) -> int:
+    def _calculate_complexity(self, code: str, language: str) -> int:
         """Calculate cyclomatic complexity (simplified)"""
-        complexity = 1
-        keywords = ["if", "elif", "else", "for", "while", "and", "or", "catch", "case"]
-        for keyword in keywords:
-            # Use regex to find whole word matches
-            complexity += len(re.findall(r"\b" + re.escape(keyword) + r"\b", code))
-        return complexity
+        try:
+            if language == "python":
+                try:
+                    visitor = ComplexityVisitor.from_code(code)
+                    return sum(block.complexity for block in visitor.blocks)
+                except Exception:
+                    print("radon failed, falling back to keyword counting")
+            complexity = 1
+            # General keywords that increase complexity
+            complexity_keywords = [
+                "if",
+                "else",
+                "elif",
+                "for",
+                "while",
+                "for(",
+                "while(",
+                "switch",
+                "case",
+                "try",
+                "catch",
+                "finally",
+                "except",
+                "&&",
+                "||",
+                "?",
+                ":",
+                "=>",
+            ]
+
+            for keyword in complexity_keywords:
+                # Count occurrences, adjusting for common patterns
+                if keyword in ["if", "for", "while"]:
+                    # Special handling to avoid double counting in "else if"
+                    if keyword == "if":
+                        count = code.count("if ") + code.count("if(") - code.count("else if")
+                    elif keyword == "for":
+                        count = code.count("for ") + code.count("for(")
+                    elif keyword == "while":
+                        count = code.count("while ") + code.count("while(")
+                    complexity += count
+                else:
+                    complexity += code.count(keyword)
+
+            return max(complexity, 1)  # Ensure at least 1
+
+        except Exception as e:
+            print(f"Complexity calculation failed: {e}")
+            return 1
 
     def _extract_dependencies(self, code: str, language: str) -> list[str]:
         deps = set()  # use set to avoid duplicates
@@ -673,7 +916,7 @@ class Analyzer:
 
     def add_analysis_metadata(self, chunk: CodeChunk) -> None:
         """Add accurate, dynamic analysis metadata (from enhanced.py)"""
-        complexity = self._calculate_complexity(chunk.code)
+        complexity = self._calculate_complexity(chunk.code, chunk.language)
         token_count = self._count_tokens(chunk.code, chunk.language)
         embedding_size = getattr(self, "embedding_size", None) or 768
         semantic_hash = self._generate_semantic_hash(chunk.code)

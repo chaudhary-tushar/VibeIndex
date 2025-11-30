@@ -31,7 +31,7 @@ def get_file_path(method: str, language: str = None, ext: str = "txt") -> Path:
 
     # If a language is provided, add it as another subdirectory
     if language:
-        target_directory = target_directory / language
+        target_directory /= language
 
     # Ensure the complete directory structure exists
     target_directory.mkdir(parents=True, exist_ok=True)
@@ -72,16 +72,12 @@ def save_data(data: Any, method: str, language: str = None, ext: str = None) -> 
         _save_csv_data(data, file_path)
     elif ext == "txt":
         _save_txt_data(data, file_path)
-    elif ext == ".sexp":
-        _save_tree_data(data, file_path)
     else:
         # Default to txt if extension is unknown
         _save_txt_data(data, file_path)
 
-    return file_path
 
-
-def _determine_file_extension(data: Any) -> str:
+def _determine_file_extension(data: Any) -> str:  # noqa: C901, PLR0911, PLR0912
     """
     Determine the appropriate file extension based on data type.
 
@@ -142,7 +138,7 @@ def _determine_file_extension(data: Any) -> str:
 
 def _save_json_data(data: Any, file_path: Path) -> None:
     """Save data as JSON format."""
-    with Path(file_path).open("w", encoding="utf-8") as file:
+    with Path(file_path).open("a", encoding="utf-8") as file:
         if isinstance(data, list):
             # Handle list of items - check if it contains Documents
             if len(data) > 0 and (
@@ -225,8 +221,7 @@ def _save_txt_data(data: Any, file_path: Path) -> None:
 
 
 def _save_tree_data(data: Node, file_path: Path) -> None:
-    print("came into trees_sitter_save results")
-    with Path(file_path).open("w") as f:
+    with Path(file_path).open("a", encoding="utf-8") as f:
 
         def print_tree_to_file(node: Node, indent=0):
             f.write("  " * indent + node.type + "\n")

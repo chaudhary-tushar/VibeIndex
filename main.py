@@ -14,6 +14,7 @@ from rich.markdown import Markdown
 
 from src.config import EmbeddingConfig
 from src.config import QdrantConfig
+from src.config import settings
 from src.embedding.embedder import EmbeddingGenerator
 from src.generation import BatchProcessor_2
 from src.generation.context_builder import ContextEnricher
@@ -396,6 +397,7 @@ def ingest(path, verbose):
     """
     Run the data ingestion pipeline - parse code into chunks.
     """
+    settings.project_path = Path(path).resolve()
     click.echo(f"Running code parsing pipeline for: {path}")
 
     try:
