@@ -4,6 +4,7 @@ Enhanced with advanced features from mature implementations
 """
 
 import hashlib
+import uuid
 from dataclasses import asdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +43,6 @@ class CodeChunk:
     defines: list[str] = None  # Symbols defined in this chunk (NEW from enhanced.py)
 
     # Comprehensive metadata structures (NEW from enhanced.py)
-    location: dict[str, Any] | None = None  # Detailed location info (start/end line, column)
     metadata: dict[str, Any] | None = None  # Code-specific metadata (decorators, access_modifier, etc.)
     documentation: dict[str, Any] | None = None  # Documentation and docstring info
     analysis: dict[str, Any] | None = None  # Code analysis (complexity, tokens, hash, etc.)
@@ -51,8 +51,6 @@ class CodeChunk:
 
     def _init_optional_fields(self):
         """Initialize optional fields with defaults"""
-        if self.location is None:
-            self.location = {}
         if self.context is None:
             self.context = {}
         if self.metadata is None:
@@ -75,8 +73,7 @@ class CodeChunk:
 
         # Generate ID if not provided
         if not self.id:
-            hash_input = f"{self.file_path}:{self.qualified_name or self.name}:{self.start_line}"
-            self.id = hashlib.md5(hash_input.encode()).hexdigest()[:12]
+            self.id = uuid.uuid4()
 
         # Initialize optional fields
         self._init_optional_fields()

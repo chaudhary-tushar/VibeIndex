@@ -72,7 +72,7 @@ class MultiLanguageContextPrompt(ContextPromptBuilder):
         Type: {chunk.get("type", "unknown")}
         Name: {chunk.get("name", "unknown")}
         Qualified Name: {chunk.get("qualified_name", "unknown")}
-        Location: Lines {chunk.get("location", {}).get("start_line", "?")}-{chunk.get("location", {}).get("end_line", "?")}
+        Location: Lines {chunk.get("start_line", "?")}-{chunk.get("end_line", "?")}
 
         {chunk_type_context}
 

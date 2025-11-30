@@ -789,41 +789,6 @@ class Analyzer:
     # ENHANCED METADATA EXTRACTION METHODS (Migrated from enhanced.py)
     # ============================================================================
 
-    def add_location_metadata(self, chunk: CodeChunk, node=None) -> None:
-        """Add detailed location info from a Tree-sitter node (from enhanced.py)"""
-        if node is None:
-            chunk.location = {
-                "start_line": chunk.start_line,
-                "end_line": chunk.end_line,
-                "start_column": 0,
-                "end_column": 0,
-            }
-            return
-
-        start_point = getattr(node, "start_point", None)
-        end_point = getattr(node, "end_point", None)
-
-        # Handle cases where start_point or end_point might be None or empty tuple
-        if not start_point or not end_point:
-            # Fallback to chunk's existing line numbers if node info is incomplete
-            chunk.location = {
-                "start_line": chunk.start_line,
-                "end_line": chunk.end_line,
-                "start_column": 0,  # Default to 0 if not available
-                "end_column": 0,  # Default to 0 if not available
-            }
-            return
-
-        start_line, start_col = start_point
-        end_line, end_col = end_point
-
-        chunk.location = {
-            "start_line": start_line + 1,
-            "end_line": end_line + 1,
-            "start_column": start_col + 1,
-            "end_column": end_col + 1,
-        }
-
     def add_code_metadata(self, chunk: CodeChunk, node=None, code_bytes: bytes = None) -> None:
         """Extract code-specific metadata (from enhanced.py)"""
         metadata = {}
@@ -921,8 +886,8 @@ class Analyzer:
         embedding_size = getattr(self, "embedding_size", None) or 768
         semantic_hash = self._generate_semantic_hash(chunk.code)
 
-        start = chunk.location.get("start_line", 1)
-        end = chunk.location.get("end_line", start)
+        start = chunk.get("start_line")
+        end = chunk.get("end_line")
         line_count = max(1, end - start + 1)
 
         chunk.analysis = {
@@ -1055,7 +1020,6 @@ class Analyzer:
         all_chunks: list[CodeChunk] = None,
     ) -> None:
         """Full enhancement pipeline for a chunk (from enhanced.py)"""
-        self.add_location_metadata(chunk, node)
         self.add_code_metadata(chunk, node, code_bytes)
         self.add_analysis_metadata(chunk)
         if file_path:

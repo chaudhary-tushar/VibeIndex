@@ -48,7 +48,6 @@ def test_codechunk_default_values():
     assert chunk.dependencies == []
     assert chunk.references == []
     assert chunk.defines == []
-    assert chunk.location == {}
     assert chunk.metadata == {}
     assert chunk.documentation == {}
     assert chunk.analysis == {}
@@ -184,7 +183,6 @@ def test_codechunk_metadata_structures():
     )
 
     # All metadata structures should be initialized as empty dicts
-    assert isinstance(chunk.location, dict)
     assert isinstance(chunk.metadata, dict)
     assert isinstance(chunk.documentation, dict)
     assert isinstance(chunk.analysis, dict)
@@ -199,7 +197,6 @@ def test_codechunk_metadata_structures():
 
 def test_codechunk_with_custom_values():
     """Test CodeChunk with custom values for all fields"""
-    custom_location = {"start_line": 1, "end_line": 5, "start_col": 0, "end_col": 10}
     custom_metadata = {"decorator": "@app.route", "access_modifier": "public"}
     custom_documentation = {"docstring": "Custom docstring", "comments": ["comment1", "comment2"]}
     custom_analysis = {"complexity": 10, "tokens": 50}
@@ -223,7 +220,6 @@ def test_codechunk_with_custom_values():
         dependencies=["os"],
         references=["sys"],
         defines=["TestClass"],
-        location=custom_location,
         metadata=custom_metadata,
         documentation=custom_documentation,
         analysis=custom_analysis,
@@ -240,7 +236,6 @@ def test_codechunk_with_custom_values():
     assert chunk.dependencies == ["os"]
     assert chunk.references == ["sys"]
     assert chunk.defines == ["TestClass"]
-    assert chunk.location == custom_location
     assert chunk.metadata == custom_metadata
     assert chunk.documentation == custom_documentation
     assert chunk.analysis == custom_analysis

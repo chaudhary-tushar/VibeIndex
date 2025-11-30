@@ -327,15 +327,6 @@ import pandas as pd
     assert "pandas" in deps
 
 
-def test_add_location_metadata(analyzer):
-    chunk = CodeChunk(name="test", type="function", code="", file_path="", start_line=0, end_line=0, language="python")
-    node = MockNode("function", "", start_point=(0, 0), end_point=(1, 10))
-    analyzer.add_location_metadata(chunk, node)
-    assert chunk.location["start_line"] == 1
-    assert chunk.location["end_line"] == 2
-    assert chunk.location["start_column"] == 1
-    assert chunk.location["end_column"] == 11
-
 
 def test_add_code_metadata(analyzer):
     chunk = CodeChunk(
@@ -360,7 +351,6 @@ def test_add_analysis_metadata(analyzer):
         start_line=1,
         end_line=1,
         language="python",
-        location={"start_line": 1, "end_line": 1},
     )
     analyzer.add_analysis_metadata(chunk)
     assert chunk.analysis["complexity"] == 2  # Changed to 2, as per discussion
@@ -409,11 +399,9 @@ def test_enhance_chunk_completely(analyzer, tmp_path):
     )
     node = MockNode("function", chunk.code, start_point=(0, 0), end_point=(0, 15))
     analyzer.enhance_chunk_completely(chunk, node, chunk.code.encode("utf-8"), p, tmp_path, [])
-    assert "location" in chunk.__dict__
     assert "metadata" in chunk.__dict__
     assert "analysis" in chunk.__dict__
     assert "relationships" in chunk.__dict__
     assert "context" in chunk.__dict__
-    assert chunk.location["start_line"] == 1
     assert chunk.analysis["complexity"] == 1
     assert "module module" in chunk.context["module_context"]
