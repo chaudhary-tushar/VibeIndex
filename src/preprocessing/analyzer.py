@@ -886,8 +886,8 @@ class Analyzer:
         embedding_size = getattr(self, "embedding_size", None) or 768
         semantic_hash = self._generate_semantic_hash(chunk.code)
 
-        start = chunk.get("start_line")
-        end = chunk.get("end_line")
+        start = chunk.start_line
+        end = chunk.end_line
         line_count = max(1, end - start + 1)
 
         chunk.analysis = {

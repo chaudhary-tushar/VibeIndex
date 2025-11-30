@@ -73,7 +73,7 @@ class CodeChunk:
 
         # Generate ID if not provided
         if not self.id:
-            self.id = uuid.uuid4()
+            self.id = str(uuid.uuid4())
 
         # Initialize optional fields
         self._init_optional_fields()
