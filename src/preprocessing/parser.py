@@ -283,7 +283,6 @@ class CodeParser:
 
         files = self.discover_files()
         console.print(f"[green]Found {len(files)} code files[/green]\n")
-        # sys.exit()
 
         self.symbol_index = {}
         for file_path in files:

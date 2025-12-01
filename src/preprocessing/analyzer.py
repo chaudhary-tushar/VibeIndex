@@ -377,53 +377,546 @@ class Analyzer:
             console.print(f"[yellow]LibCST parse error for {file_path}: {e}[/yellow]")
             return []
 
+        # First, collect all imports in the file
+        class ImportVisitor(cst.CSTVisitor):
+            def __init__(self):
+                self.imports = {}  # Maps local name to module source
+                self.from_imports = {}  # Maps local name to (module, attribute) for "from X import Y"
+                self.django_model_imports = {}  # Django-specific: maps local names to model classes
+
+            def visit_Import(self, node: cst.Import) -> None:
+                for alias in node.names:
+                    # Handle "import module" or "import module as name"
+                    local_name = alias.asname.value if alias.asname else alias.name.value
+                    if isinstance(alias.name, cst.Name):
+                        module_name = alias.name.value
+                    elif isinstance(alias.name, cst.Attribute):
+                        module_name = code_for_node(alias.name)
+                    else:
+                        module_name = code_for_node(alias.name)
+                    self.imports[local_name] = module_name
+                    # Check for Django models import
+                    if module_name in ["django.db.models", "django.core.models"]:
+                        self.django_model_imports[local_name] = module_name
+
+            def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+                # Get the module name being imported from
+                if isinstance(node.module, cst.Name):
+                    module_name = node.module.value
+                elif isinstance(node.module, cst.Attribute):  # e.g., django.contrib.gis
+                    module_name = code_for_node(node.module)
+                elif isinstance(node.module, cst.RelativeImport):  # relative imports like "from .models import X"
+                    # For relative imports, we'll store the relative path
+                    module_name = "." * len(node.module.dots) + (node.module.module.value if node.module.module else "")
+                else:
+                    return
+
+                # Process each imported name
+                for alias in node.names:
+                    local_name = alias.asname.value if alias.asname else alias.name.value
+                    if isinstance(alias.name, cst.Name):
+                        # Handle "from module import name"
+                        self.from_imports[local_name] = (module_name, alias.name.value)
+                        # Check for Django-specific imports
+                        imported_name = alias.name.value
+                        if (
+                            module_name in ["django.db", "django.db.models", "django.core.models"]
+                            and imported_name == "models"
+                        ):
+                            self.django_model_imports[local_name] = f"{module_name}.{imported_name}"
+                    elif isinstance(alias.name, cst.Attribute):
+                        # Handle complex imports like "from module import attr.subattr"
+                        attr_name = code_for_node(alias.name)
+                        self.from_imports[local_name] = (module_name, attr_name)
+
+        # Helper function to extract code for a node
+        def code_for_node(node):
+            """Extract the code representation of a node."""
+            try:
+                return module.code_for_node(node)
+            except:
+                # Fallback for cases where code_for_node fails
+                if hasattr(node, "value") and node.value:
+                    return node.value
+                return str(node)
+
+        import_visitor = ImportVisitor()
+        wrapper.visit(import_visitor)
+
         relative_path = str(file_path.relative_to(settings.project_path))  # Go up to project root
         # chunks = []
 
         class FunctionVisitor(cst.CSTVisitor):
             METADATA_DEPENDENCIES = (PositionProvider,)
 
-            def __init__(self, analyzer_instance: Analyzer):
+            def __init__(
+                self,
+                analyzer_instance: Analyzer,
+                file_imports: dict,
+                file_from_imports: dict,
+                django_model_imports: dict,
+            ):
                 self.chunks = []
                 self.current_class = None
+                self.current_function = None
                 self.analyzer = analyzer_instance
+                self.file_imports = file_imports
+                self.file_from_imports = file_from_imports
+                self.django_model_imports = django_model_imports
+                self.current_function_imports = set()  # Track imports used in current function
+                self.current_class_imports = set()  # Track imports used in current class
+                self.django_model_relationships = {}  # Track Django model relationships within this class
+                self.current_class_inheritance = []  # Track class inheritance
+                self.django_meta_classes = {}  # Track Django Meta classes
+                self.django_model_managers = {}  # Track Django Model Managers
+                self.django_model_metadata = {}  # Track Django model metadata (like fields, options)
+                self.current_class_decorators = []  # Track decorators for the current class
+                self.current_class_type = None  # Track the current class type
 
             def visit_ClassDef(self, node: cst.ClassDef):
-                self.current_class = node.name.value
+                class_name = node.name.value
+                if self.current_class is None:
+                    # This is a top-level class
+                    self.current_class = class_name
+                    # Store decorators for the top-level class
+                    self.current_class_decorators = []
+                    if hasattr(node, "decorators") and node.decorators:
+                        for deco in node.decorators:
+                            try:
+                                deco_code = module.code_for_node(deco.decorator)
+                                self.current_class_decorators.append(deco_code)
+                            except:
+                                continue
+                else:
+                    # This is a nested class
+                    class_name = f"{self.current_class}.{class_name}"
 
-            def leave_ClassDef(self, original_node: cst.ClassDef):
-                start_line, end_line = self._get_position(original_node)
-                code_block = module.code_for_node(original_node)
-                called_symbols = self.analyzer.find_called_symbols(code_block, "python", symbol_index)
+                # Check if this is a Django Meta class
+                if class_name.endswith(".Meta"):
+                    if self.current_class:
+                        # Track this as a Meta class for the parent class
+                        self.django_meta_classes[self.current_class] = node
+                        # Process the content of the Meta class for Django-specific attributes
+                        self._process_django_meta_class(node, class_name)
+                elif any(
+                    base_class in self.django_model_imports
+                    or any(django_import in base_class for django_import in self.django_model_imports.keys())
+                    for base_class in [
+                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
+                        for base in node.bases or []
+                    ]
+                ):
+                    # This is a Django model class
+                    self.current_class = class_name
+                    # Store decorators for this Django model class
+                    self.current_class_decorators = []
+                    if hasattr(node, "decorators") and node.decorators:
+                        for deco in node.decorators:
+                            try:
+                                deco_code = module.code_for_node(deco.decorator)
+                                self.current_class_decorators.append(deco_code)
+                            except:
+                                continue
+                    # Track class inheritance
+                    self.current_class_inheritance = []
+                    if node.bases:
+                        for base in node.bases:
+                            if isinstance(base.value, cst.Name):
+                                self.current_class_inheritance.append(base.value.value)
+                            elif isinstance(base.value, cst.Attribute):
+                                # Handle attribute inheritance like models.Model
+                                self.current_class_inheritance.append(code_for_node(base.value))
 
-                # Build class signature
-                signature = self._get_class_signature(original_node)
+                    # Extract Django model-specific metadata
+                    self.django_model_metadata = {"model_fields": [], "meta_options": {}, "managers": []}
 
-                chunk = CodeChunk(
-                    type="class",
-                    name=original_node.name.value,
-                    code=code_block,
-                    file_path=relative_path,
-                    language="python",
-                    start_line=start_line,
-                    end_line=end_line,
-                    docstring=self._get_docstring(original_node),
-                    dependencies=self.analyzer._extract_dependencies(code_block, language="python"),
-                    signature=signature,
-                    complexity=self.analyzer._calculate_complexity(code_block, language="python"),
-                    defines=[original_node.name.value],
-                    references=called_symbols,
-                )
-                self.chunks.append(chunk)
-                self.current_class = None
+                # Check if this is a Django admin class
+                elif any(
+                    "admin" in base_class.lower()
+                    or "Admin" in base_class
+                    or base_class in ["admin.ModelAdmin", "admin.StackedInline", "admin.TabularInline"]
+                    for base_class in [
+                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
+                        for base in node.bases or []
+                    ]
+                ):
+                    # This is a Django admin class
+                    self.current_class = class_name
+                    self.current_class_type = "django_admin"
+                    # Track admin-specific attributes
+                    self.django_admin_attributes = {}
+                    self.django_admin_metadata = {
+                        "list_display": [],
+                        "list_filter": [],
+                        "search_fields": [],
+                        "readonly_fields": [],
+                    }
+                    # Extract admin-specific metadata from the class body
+                    self._process_django_admin_class(node)
+
+                # Check if this is a Django form class
+                elif any(
+                    "Form" in base_class or "form" in base_class.lower()
+                    for base_class in [
+                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
+                        for base in node.bases or []
+                    ]
+                ):
+                    # This is a Django form class
+                    self.current_class = class_name
+                    self.current_class_type = "django_form"
+                    # Track form-specific attributes
+                    self.django_form_fields = {}
+                    self.django_form_metadata = {"form_fields": [], "widgets": []}
+                    # Extract form-specific metadata
+                    self._process_django_form_class(node)
+
+                # Check if this is a Django view class
+                elif any(
+                    "View" in base_class or "view" in base_class.lower()
+                    for base_class in [
+                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
+                        for base in node.bases or []
+                    ]
+                ):
+                    # This is a Django view class
+                    self.current_class = class_name
+                    self.current_class_type = "django_view"
+                    # Track view-specific attributes
+                    self.django_view_methods = []
+                    self.django_view_metadata = {"http_methods": [], "decorators": []}
+                    # Extract view-specific metadata
+                    self._process_django_view_class(node)
+
+                # Handle other Django class types like managers
+                elif any(
+                    "Manager" in base_class
+                    for base_class in [
+                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
+                        for base in node.bases or []
+                    ]
+                ):
+                    # This is a Django manager class
+                    self.current_class = class_name
+                    self.current_class_type = "django_manager"
+                    self.django_manager_metadata = {"custom_methods": []}
+                    # Process manager-specific metadata
+                    self._process_django_manager_class(node)
+
+                # Handle Django model classes with more detailed field detection
+                if class_name not in self.django_model_imports and any(
+                    django_import in base_class.lower()
+                    for django_import in ["models", "model"]
+                    for base_class in self.current_class_inheritance
+                ):
+                    # Process model fields in the class body
+                    self._process_django_model_fields(node)
+
+            def _process_django_model_fields(self, node: cst.ClassDef):
+                """Process Django model fields in the class definition"""
+                if not node.body:
+                    return
+
+                model_fields = []
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                    if isinstance(stmt, cst.SimpleStatementLine):
+                        for expr in stmt.body:
+                            if isinstance(expr, cst.Assign):
+                                for target in expr.targets:
+                                    if isinstance(target.target, cst.Name):
+                                        field_name = target.target.value
+                                        # Check if the assignment is a field definition like CharField, IntegerField, etc.
+                                        if isinstance(expr.value, cst.Call) and isinstance(expr.value.func, cst.Name):
+                                            field_type = expr.value.func.value
+                                            if field_type in [
+                                                "CharField",
+                                                "IntegerField",
+                                                "TextField",
+                                                "EmailField",
+                                                "ForeignKey",
+                                                "ManyToManyField",
+                                                "OneToOneField",
+                                                "DateTimeField",
+                                                "DateField",
+                                                "BooleanField",
+                                                "FloatField",
+                                            ]:
+                                                # This is a Django model field
+                                                model_fields.append({
+                                                    "name": field_name,
+                                                    "type": field_type,
+                                                    "parameters": self._extract_call_arguments(expr.value),
+                                                })
+                                        # Check for attribute-based field definitions like models.CharField
+                                        elif (
+                                            isinstance(expr.value, cst.Call)
+                                            and isinstance(expr.value.func, cst.Attribute)
+                                            and isinstance(expr.value.func.value, cst.Name)
+                                        ):
+                                            base_name = expr.value.func.value.value
+                                            field_type = expr.value.func.attr.value
+                                            if base_name in self.django_model_imports and field_type in [
+                                                "CharField",
+                                                "IntegerField",
+                                                "TextField",
+                                                "EmailField",
+                                                "ForeignKey",
+                                                "ManyToManyField",
+                                                "OneToOneField",
+                                                "DateTimeField",
+                                                "DateField",
+                                                "BooleanField",
+                                                "FloatField",
+                                            ]:
+                                                # This is a Django model field using models.CharField format
+                                                model_fields.append({
+                                                    "name": field_name,
+                                                    "type": field_type,
+                                                    "base": base_name,
+                                                    "parameters": self._extract_call_arguments(expr.value),
+                                                })
+
+                # Store the detected model fields in the current class relationships
+                if self.current_class:
+                    self.django_model_relationships[self.current_class] = model_fields
+
+            def _process_django_admin_class(self, node: cst.ClassDef):
+                """Process Django admin class attributes"""
+                if not node.body:
+                    return
+
+                admin_attrs = {}
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                    if isinstance(stmt, cst.SimpleStatementLine):
+                        for expr in stmt.body:
+                            if isinstance(expr, cst.Assign):
+                                for target in expr.targets:
+                                    if isinstance(target.target, cst.Name):
+                                        attr_name = target.target.value
+                                        if attr_name in [
+                                            "list_display",
+                                            "list_filter",
+                                            "search_fields",
+                                            "readonly_fields",
+                                            "exclude",
+                                            "fields",
+                                        ]:
+                                            try:
+                                                attr_value = module.code_for_node(expr.value)
+                                                admin_attrs[attr_name] = attr_value
+                                            except:
+                                                continue
+
+                # Store admin attributes
+                if self.current_class:
+                    self.django_admin_attributes = admin_attrs
+
+            def _process_django_form_class(self, node: cst.ClassDef):
+                """Process Django form class fields"""
+                if not node.body:
+                    return
+
+                form_fields = []
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                    if isinstance(stmt, cst.SimpleStatementLine):
+                        for expr in stmt.body:
+                            if isinstance(expr, cst.Assign):
+                                for target in expr.targets:
+                                    if isinstance(target.target, cst.Name):
+                                        field_name = target.target.value
+                                        # Check if the assignment is a form field definition
+                                        if isinstance(expr.value, cst.Call):
+                                            if isinstance(expr.value.func, cst.Name):
+                                                field_type = expr.value.func.value
+                                                if field_type in [
+                                                    "CharField",
+                                                    "IntegerField",
+                                                    "TextField",
+                                                    "EmailField",
+                                                    "ChoiceField",
+                                                    "ModelChoiceField",
+                                                    "ModelMultipleChoiceField",
+                                                ]:
+                                                    # This is a Django form field
+                                                    form_fields.append({
+                                                        "name": field_name,
+                                                        "type": field_type,
+                                                        "parameters": self._extract_call_arguments(expr.value),
+                                                    })
+                                            elif isinstance(expr.value.func, cst.Attribute) and isinstance(
+                                                expr.value.func.value, cst.Name
+                                            ):
+                                                base_name = expr.value.func.value.value
+                                                field_type = expr.value.func.attr.value
+                                                if base_name in ["forms", "django.forms"] and field_type in [
+                                                    "CharField",
+                                                    "IntegerField",
+                                                    "TextField",
+                                                    "EmailField",
+                                                    "ChoiceField",
+                                                    "ModelChoiceField",
+                                                    "ModelMultipleChoiceField",
+                                                ]:
+                                                    # This is a Django form field using forms.CharField format
+                                                    form_fields.append({
+                                                        "name": field_name,
+                                                        "type": field_type,
+                                                        "base": base_name,
+                                                        "parameters": self._extract_call_arguments(expr.value),
+                                                    })
+
+                # Store form fields
+                if self.current_class:
+                    self.django_form_fields = form_fields
+
+            def _process_django_view_class(self, node: cst.ClassDef):
+                """Process Django view class methods and decorators"""
+                if not node.body:
+                    return
+
+                view_methods = []
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                    if isinstance(stmt, cst.FunctionDef):
+                        method_name = stmt.name.value
+                        # Check if this is a standard HTTP method or Django-specific method
+                        if method_name in [
+                            "get",
+                            "post",
+                            "put",
+                            "delete",
+                            "dispatch",
+                            "setup",
+                            "get_context_data",
+                            "get_queryset",
+                        ]:
+                            decorators = []
+                            if hasattr(stmt, "decorators") and stmt.decorators:
+                                for deco in stmt.decorators:
+                                    try:
+                                        decorators.append(module.code_for_node(deco.decorator))
+                                    except:
+                                        continue
+                            view_methods.append({"name": method_name, "decorators": decorators})
+
+                # Store view methods
+                if self.current_class:
+                    self.django_view_methods = view_methods
+
+            def _process_django_manager_class(self, node: cst.ClassDef):
+                """Process Django manager class custom methods"""
+                if not node.body:
+                    return
+
+                custom_methods = []
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                    if isinstance(stmt, cst.FunctionDef):
+                        method_name = stmt.name.value
+                        # For manager classes, consider all methods as custom methods
+                        custom_methods.append(method_name)
+
+                # Store custom methods
+                if self.current_class:
+                    self.django_manager_metadata["custom_methods"] = custom_methods
+
+            def _extract_call_arguments(self, call_node: cst.Call) -> dict:
+                """Extract arguments from a function call"""
+                args_info = {}
+                if call_node.args:
+                    for i, arg in enumerate(call_node.args):
+                        try:
+                            if arg.keyword:
+                                # Named argument like name=value
+                                args_info[arg.keyword.value] = module.code_for_node(arg.value)
+                            else:
+                                # Positional argument
+                                args_info[f"pos_{i}"] = module.code_for_node(arg.value)
+                        except:
+                            continue
+                return args_info
+
+            def _process_django_meta_class(self, node: cst.ClassDef, class_name: str):
+                """Process Django Meta class content for model options"""
+                if not node.body:
+                    return
+
+                meta_attrs = {}
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                    if isinstance(stmt, cst.SimpleStatementLine):
+                        for expr in stmt.body:
+                            if isinstance(expr, cst.Assign):
+                                for target in expr.targets:
+                                    if isinstance(target.target, cst.Name):
+                                        attr_name = target.target.value
+                                        try:
+                                            attr_value = module.code_for_node(expr.value)
+                                            meta_attrs[attr_name] = attr_value
+                                        except:
+                                            continue
+                    elif hasattr(stmt, "child_by_field_name"):
+                        # Handle cases where the assignment is more complex
+                        name_node = stmt.child_by_field_name("name")
+                        if name_node and hasattr(name_node, "value"):
+                            attr_name = name_node.value
+                            value_node = stmt.child_by_field_name("value")
+                            if value_node:
+                                try:
+                                    attr_value = module.code_for_node(value_node)
+                                    meta_attrs[attr_name] = attr_value
+                                except:
+                                    continue
+
+                # Store Meta class attributes for the parent class
+                parent_class_name = class_name[:-5]  # Remove '.Meta' suffix
+                if parent_class_name in self.django_meta_classes:
+                    self.django_meta_classes[parent_class_name] = meta_attrs
+                else:
+                    self.django_meta_classes[parent_class_name] = meta_attrs
+
+                # Process common Django Meta options
+                for attr_name, attr_value in meta_attrs.items():
+                    if attr_name == "db_table":
+                        self.django_model_metadata["db_table"] = attr_value
+                    elif attr_name == "verbose_name":
+                        self.django_model_metadata["verbose_name"] = attr_value
+                    elif attr_name == "verbose_name_plural":
+                        self.django_model_metadata["verbose_name_plural"] = attr_value
+                    elif attr_name == "ordering":
+                        self.django_model_metadata["ordering"] = attr_value
+                    elif attr_name == "indexes":
+                        self.django_model_metadata["indexes"] = attr_value
+                    elif attr_name == "unique_together":
+                        self.django_model_metadata["unique_together"] = attr_value
+                    elif attr_name == "abstract":
+                        self.django_model_metadata["is_abstract"] = "True" in attr_value
+                    elif attr_name == "managed":
+                        self.django_model_metadata["is_managed"] = "True" in attr_value
+
+            def visit_FunctionDef(self, node: cst.FunctionDef):
+                self.current_function = node.name.value
+                # Reset imports tracking for this function
+                self.current_function_imports = set()
 
             def leave_FunctionDef(self, original_node: cst.FunctionDef):
                 start_line, end_line = self._get_position(original_node)
                 code_block = module.code_for_node(original_node)
-                called_symbols = self.analyzer.find_called_symbols(code_block, "python", {})
+
+                # Combine general references with imports used in this function
+                general_refs = self.analyzer.find_called_symbols(code_block, "python", {})
+                all_references = list(set(general_refs) | self.current_function_imports)
+
+                # Extract dependencies from imports used in this function
+                dependencies = self.analyzer._extract_dependencies(code_block, language="python")
+                for import_name in self.current_function_imports:
+                    if import_name in self.file_imports:
+                        dependencies.append(self.file_imports[import_name])
+                    elif import_name in self.file_from_imports:
+                        # Add module part of the from import
+                        dependencies.append(self.file_from_imports[import_name][0])
 
                 # Build more accurate function signature
                 signature = self._get_function_signature(original_node)
+
+                # Create the chunk first
                 chunk = CodeChunk(
                     type="method" if self.current_class else "function",
                     name=original_node.name.value,
@@ -433,14 +926,262 @@ class Analyzer:
                     start_line=start_line,
                     end_line=end_line,
                     docstring=self._get_docstring(original_node),
-                    dependencies=self.analyzer._extract_dependencies(code_block, language="python"),
+                    dependencies=sorted(list(set(dependencies))),
                     signature=signature,
                     complexity=self.analyzer._calculate_complexity(code_block, language="python"),
                     parent=self.current_class,
                     defines=[original_node.name.value],
-                    references=called_symbols,
+                    references=sorted(list(set(all_references))),
                 )
+
+                # Enhance relationships metadata
+                chunk.relationships.update({
+                    "imports_used": sorted(list(self.current_function_imports)),
+                    "class_inheritance": [] if not self.current_class else self.current_class_inheritance,
+                    "django_model_fields": []
+                    if not self.current_class
+                    else self.django_model_relationships.get(self.current_class, []),
+                })
+
                 self.chunks.append(chunk)
+                self.current_function = None
+
+            def leave_ClassDef(self, original_node: cst.ClassDef):
+                start_line, end_line = self._get_position(original_node)
+                code_block = module.code_for_node(original_node)
+
+                # Combine general references with imports used in this class
+                general_refs = self.analyzer.find_called_symbols(code_block, "python", symbol_index)
+                all_references = list(set(general_refs) | self.current_class_imports)
+
+                # Extract dependencies from imports used in this class
+                dependencies = self.analyzer._extract_dependencies(code_block, language="python")
+                for import_name in self.current_class_imports:
+                    if import_name in self.file_imports:
+                        dependencies.append(self.file_imports[import_name])
+                    elif import_name in self.file_from_imports:
+                        # Add module part of the from import
+                        dependencies.append(self.file_from_imports[import_name][0])
+
+                # Add Django-specific dependencies if this is a model class
+                if self.current_class_inheritance:
+                    for inheritance in self.current_class_inheritance:
+                        if any(django_import in inheritance for django_import in self.django_model_imports.keys()):
+                            dependencies.append("django.db.models")
+
+                # Build class signature
+                signature = self._get_class_signature(original_node)
+
+                # Determine the type of Django class if applicable
+                class_type = "class"
+                if self.current_class_inheritance:
+                    # Check if it's a Django model class
+                    for inheritance in self.current_class_inheritance:
+                        if "models" in inheritance.lower():
+                            class_type = "django_model"
+                            break
+                        elif "admin" in inheritance.lower():
+                            class_type = "django_admin"
+                            break
+                        elif "Form" in inheritance or "form" in inheritance.lower():
+                            class_type = "django_form"
+                            break
+                        elif "View" in inheritance or "view" in inheritance.lower():
+                            class_type = "django_view"
+                            break
+
+                # Create the chunk first
+                chunk = CodeChunk(
+                    type=class_type,
+                    name=original_node.name.value,
+                    code=code_block,
+                    file_path=relative_path,
+                    language="python",
+                    start_line=start_line,
+                    end_line=end_line,
+                    docstring=self._get_docstring(original_node),
+                    dependencies=sorted(list(set(dependencies))),
+                    signature=signature,
+                    complexity=self.analyzer._calculate_complexity(code_block, language="python"),
+                    parent=None,  # Set parent if class is nested
+                    defines=[original_node.name.value],
+                    references=sorted(list(set(all_references))),
+                )
+
+                # Extract decorators from the original node
+                decorators = []
+                if hasattr(original_node, "decorators") and original_node.decorators:
+                    for deco in original_node.decorators:
+                        try:
+                            decorators.append(module.code_for_node(deco.decorator))
+                        except:
+                            continue
+                chunk.metadata["decorators"] = decorators
+
+                # Extract base classes from the node
+                base_classes = []
+                if original_node.bases:
+                    for base in original_node.bases:
+                        try:
+                            base_class_str = module.code_for_node(base.value)
+                            base_classes.append(base_class_str)
+                        except:
+                            continue
+                chunk.metadata["base_classes"] = base_classes
+
+                # Extract Django model fields if this is a model class
+                if class_type == "django_model":
+                    if self.current_class in self.django_model_relationships:
+                        django_fields = [f for _, f in self.django_model_relationships[self.current_class]]
+                        if "django_model_fields" not in chunk.relationships:
+                            chunk.relationships["django_model_fields"] = []
+                        chunk.relationships["django_model_fields"].extend(django_fields)
+
+                    # Extract Django model managers if any
+                    if self.current_class in self.django_model_managers:
+                        django_managers = [m for _, m in self.django_model_managers[self.current_class]]
+                        if "django_model_managers" not in chunk.relationships:
+                            chunk.relationships["django_model_managers"] = []
+                        chunk.relationships["django_model_managers"].extend(django_managers)
+
+                # Enhance relationships metadata
+                chunk.relationships.update({
+                    "imports_used": sorted(list(self.current_class_imports)),
+                    "class_inheritance": self.current_class_inheritance,
+                    "django_model_fields": self.django_model_relationships.get(self.current_class, []),
+                    "django_model_inheritance": [
+                        base
+                        for base in self.current_class_inheritance
+                        if any(django_import in base for django_import in self.django_model_imports.keys())
+                    ],
+                    "django_model_managers": self.django_model_managers.get(self.current_class, []),
+                    "django_meta_class": self.django_meta_classes.get(self.current_class, {}),
+                    "django_admin_registration": getattr(self, "current_class_metadata", {}).get(
+                        "admin_registers", None
+                    ),
+                })
+
+                self.chunks.append(chunk)
+                self.current_class = None
+
+            def visit_Name(self, node: cst.Name) -> None:
+                # Check if this name matches any imported names
+                name = node.value
+                if name in self.file_imports or name in self.file_from_imports:
+                    if self.current_function:  # If we're inside a function
+                        self.current_function_imports.add(name)
+                    elif self.current_class:  # If we're inside a class
+                        self.current_class_imports.add(name)
+
+            def visit_Attribute(self, node: cst.Attribute) -> None:
+                # Handle attribute access like "module.function" or "obj.method"
+                if isinstance(node.value, cst.Name):
+                    name = node.value.value
+                    # Check if the base of the attribute is an imported name
+                    if name in self.file_imports or name in self.file_from_imports:
+                        if self.current_function:
+                            self.current_function_imports.add(name)
+                        elif self.current_class:
+                            self.current_class_imports.add(name)
+                    # Special handling for Django field definitions in classes
+                    if self.current_class and name in self.django_model_imports:
+                        # This might be something like models.CharField
+                        field_type = code_for_node(node.attr)
+                        if field_type in [
+                            "CharField",
+                            "IntegerField",
+                            "ForeignKey",
+                            "ManyToManyField",
+                            "OneToOneField",
+                        ]:
+                            # Track Django model fields if we're in a class definition
+                            if self.current_class not in self.django_model_relationships:
+                                self.django_model_relationships[self.current_class] = []
+                            self.django_model_relationships[self.current_class].append((name, field_type))
+                        # Track Django model managers
+                        elif field_type in ["Manager", "RelatedManager"]:
+                            if self.current_class not in self.django_model_managers:
+                                self.django_model_managers[self.current_class] = []
+                            self.django_model_managers[self.current_class].append((name, field_type))
+
+                # Also handle deeply nested attribute access like 'django.contrib.admin.site'
+                elif isinstance(node.value, cst.Attribute):
+                    # This handles cases like admin.site.register
+                    attr_node = node.value
+                    if isinstance(attr_node.value, cst.Name):
+                        base_name = attr_node.value.value
+                        if base_name in self.file_imports or base_name in self.file_from_imports:
+                            if self.current_function:
+                                self.current_function_imports.add(base_name)
+                            elif self.current_class:
+                                self.current_class_imports.add(base_name)
+                    # Handle more complex attribute access patterns like models.ForeignKey
+                    elif isinstance(attr_node.value, cst.Attribute):
+                        # This could be something like models.fields.CharField
+                        nested_attr = attr_node.value
+                        if isinstance(nested_attr.value, cst.Name):
+                            nested_base_name = nested_attr.value.value
+                            if nested_base_name in self.django_model_imports or nested_base_name in self.file_imports:
+                                if self.current_class:
+                                    # Track more specific Django field types
+                                    field_name = code_for_node(node.attr)
+                                    full_attr_chain = f"{nested_base_name}.{code_for_node(attr_node.attr)}.{field_name}"
+                                    if field_name in [
+                                        "CharField",
+                                        "IntegerField",
+                                        "ForeignKey",
+                                        "ManyToManyField",
+                                        "OneToOneField",
+                                    ]:
+                                        if self.current_class not in self.django_model_relationships:
+                                            self.django_model_relationships[self.current_class] = []
+                                        self.django_model_relationships[self.current_class].append((
+                                            nested_base_name,
+                                            field_name,
+                                        ))
+
+            def visit_Call(self, node: cst.Call) -> None:
+                # Track function calls
+                if isinstance(node.func, cst.Name):
+                    name = node.func.value
+                    # Check if it's an imported function
+                    if name in self.file_imports or name in self.file_from_imports:
+                        if self.current_function:
+                            self.current_function_imports.add(name)
+                        elif self.current_class:
+                            self.current_class_imports.add(name)
+                elif isinstance(node.func, cst.Attribute):
+                    # Handle attribute calls like "module.function()"
+                    if isinstance(node.func.value, cst.Name):
+                        name = node.func.value.value
+                        if name in self.file_imports or name in self.file_from_imports:
+                            if self.current_function:
+                                self.current_function_imports.add(name)
+                            elif self.current_class:
+                                self.current_class_imports.add(name)
+                    # Handle calls like "admin.site.register(Model)"
+                    elif isinstance(node.func.value, cst.Attribute):
+                        # This could be something like admin.site.register
+                        attr_node = node.func.value
+                        if isinstance(attr_node.value, cst.Name):
+                            base_name = attr_node.value.value
+                            if base_name in self.file_imports or base_name in self.file_from_imports:
+                                if self.current_function or self.current_class:
+                                    # Add the base import to be tracked
+                                    if self.current_function:
+                                        self.current_function_imports.add(base_name)
+                                    elif self.current_class:
+                                        self.current_class_imports.add(base_name)
+                    # Special handling for Django admin registrations
+                    if code_for_node(node.func) == "admin.site.register":
+                        if node.args and len(node.args) >= 1:
+                            model_name = code_for_node(node.args[0].value)
+                            if self.current_class:
+                                # Track that this class registers a model with admin
+                                if hasattr(self, "current_class_metadata") and self.current_class_metadata:
+                                    self.current_class_metadata["admin_registers"] = model_name
+                                else:
+                                    self.current_class_metadata = {"admin_registers": model_name}
 
             def _get_position(self, node):
                 pos = self.get_metadata(PositionProvider, node)
@@ -655,7 +1396,9 @@ class Analyzer:
 
                 return f"class {name}{bases_str}:"
 
-        visitor = FunctionVisitor(self)
+        visitor = FunctionVisitor(
+            self, import_visitor.imports, import_visitor.from_imports, import_visitor.django_model_imports
+        )
         wrapper.visit(visitor)
         save_data(module, method="cst")
         return visitor.chunks
@@ -815,24 +1558,21 @@ class Analyzer:
         """Extract decorators from Python AST or CST nodes (from enhanced.py)"""
         decorators = []
 
-        if hasattr(node, "decorators"):
+        if hasattr(node, "decorators") and node.decorators:
             for deco in node.decorators:
                 try:
-                    decorators.append(cst.Module([]).code_for_node(deco).strip())
+                    # Access the decorator using proper libCST methods
+                    decorator_code = deco.decorator
+                    decorator_str = decorator_code.value if hasattr(decorator_code, "value") else str(decorator_code)
+                    decorators.append(decorator_str)
                 except Exception:
-                    continue
+                    try:
+                        # Fallback to using module.code_for_node if available
+                        decorator_str = module.code_for_node(deco.decorator)
+                        decorators.append(decorator_str)
+                    except:
+                        continue
             return decorators
-
-        if not hasattr(node, "children"):
-            return decorators
-
-        for child in node.children:
-            if hasattr(child, "type") and child.type == "decorator":
-                try:
-                    deco = code_bytes[child.start_byte : child.end_byte].decode("utf-8").strip()
-                    decorators.append(deco)
-                except Exception:
-                    continue
 
         return decorators
 
