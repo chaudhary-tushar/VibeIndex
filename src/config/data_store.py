@@ -64,6 +64,9 @@ def save_data(data: Any, method: str, language: str = None, ext: str = None) -> 
 
     # Create the file path
     file_path = get_file_path(method, language, ext)
+    if method == "cst":
+        print_libcst_node_types(data, file_path)
+        return file_path
 
     # Save data based on its type
     if ext == "json":
@@ -75,6 +78,7 @@ def save_data(data: Any, method: str, language: str = None, ext: str = None) -> 
     else:
         # Default to txt if extension is unknown
         _save_txt_data(data, file_path)
+    return file_path
 
 
 def _determine_file_extension(data: Any) -> str:  # noqa: C901, PLR0911, PLR0912
@@ -229,3 +233,11 @@ def _save_tree_data(data: Node, file_path: Path) -> None:
                 print_tree_to_file(child, indent + 1)
 
         print_tree_to_file(data)
+
+
+def print_libcst_node_types(module, output_file_path: Path) -> None:
+    """
+    Print only the node types from a libcst module to a file with indentation
+    """
+    with Path(output_file_path).open("a", encoding="utf-8") as f:
+        f.write(str(module) + "\n")

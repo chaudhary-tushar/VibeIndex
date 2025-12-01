@@ -5,13 +5,12 @@ Preprocessing module for RAG indexing pipeline
 from pathlib import Path
 
 from .analyzer import Analyzer
-from .chunk import ChunkPreprocessor  # Enhanced version
-from .chunk import ChunkPreprocessor2  # Original version for backward compatibility
 from .chunk import CodeChunk
 from .dependency_mapper import DependencyMapper
 from .language_config import LanguageConfig
 from .metadata_extractor import MetadataExtractor
 from .parser import CodeParser
+from .preprocessor import ChunkPreprocessor
 
 __all__ = ["Analyzer", "CodeChunk", "CodeParser", "DependencyMapper", "LanguageConfig", "MetadataExtractor"]
 
@@ -56,4 +55,4 @@ Preprocessing module exports - Enhanced with advanced ChunkPreprocessor
 """
 
 
-__all__ = ["ChunkPreprocessor", "ChunkPreprocessor2", "CodeChunk"]
+__all__ = ["ChunkPreprocessor", "CodeChunk"]

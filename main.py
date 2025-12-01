@@ -24,7 +24,7 @@ from src.generation.context_builder import stats_check
 # Import our preprocessing modules
 from src.preprocessing import parse_file
 from src.preprocessing import parse_project
-from src.preprocessing.chunk import ChunkPreprocessor
+from src.preprocessing.preprocessor import ChunkPreprocessor
 from src.retrieval import CodeRAG_2
 from src.retrieval.hybrid_search import setup_hybrid_collection
 from src.retrieval.search import QdrantIndexer

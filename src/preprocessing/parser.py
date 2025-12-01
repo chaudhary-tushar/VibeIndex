@@ -89,18 +89,6 @@ class CodeParser:
         save_data(files, method="collecting-reading", ext="txt")
         return files
 
-    # def discover_files(self) -> list[Path]:
-    #     """Discover all code files in project"""
-    #     files1 = SimpleDirectoryReader(
-    #         input_dir=self.project_path,
-    #         recursive=True,
-    #         )
-    #     files = files1.load_data()
-    #     print(type(files[0]))
-    #     res = files1.list_resources_with_info()
-    #     save_data(files, method="collecting-reading")
-    #     return files
-
     @staticmethod
     def _determine_language(file_path: Path) -> tuple[str | None, bytes]:
         """Determine language and read file content"""

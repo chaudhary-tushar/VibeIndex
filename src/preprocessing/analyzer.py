@@ -7,6 +7,8 @@ import hashlib
 import re
 from pathlib import Path
 from src.config import settings
+from src.config.data_store import save_data
+
 
 import libcst as cst
 from radon.visitors import ComplexityVisitor
@@ -369,6 +371,8 @@ class Analyzer:
 
             wrapper = cst.MetadataWrapper(cst.parse_module(code))
             module = wrapper.module
+            # print(module)
+
         except Exception as e:
             console.print(f"[yellow]LibCST parse error for {file_path}: {e}[/yellow]")
             return []
@@ -653,6 +657,7 @@ class Analyzer:
 
         visitor = FunctionVisitor(self)
         wrapper.visit(visitor)
+        save_data(module, method="cst")
         return visitor.chunks
 
     def find_called_symbols(self, code: str, language: str, symbol_index: dict) -> list[str]:
