@@ -3,6 +3,11 @@ import pytest
 from src.preprocessing.chunk import CodeChunk
 from src.preprocessing.metadata_extractor import MetadataExtractor
 
+# Constants for test magic values
+COMPLEXITY_IF_ELIF_ELSE = 4
+COMPLEXITY_FOR_IF = 3
+COMPLEXITY_MULTIPLE = 5
+
 
 @pytest.fixture
 def metadata_extractor():
@@ -59,7 +64,7 @@ def test_extract_signature_empty_code(metadata_extractor):
     """Test signature extraction from empty code"""
     code = ""
     signature = metadata_extractor.extract_signature(code)
-    assert signature == ""  # Returns empty string, not None
+    assert not signature  # Returns empty string, not None
 
 
 def test_extract_signature_whitespace_only_code(metadata_extractor):
@@ -67,7 +72,7 @@ def test_extract_signature_whitespace_only_code(metadata_extractor):
     code = "   \n\t  \n"
     signature = metadata_extractor.extract_signature(code)
     # Should return the first non-empty line stripped
-    assert signature == ""
+    assert not signature
 
 
 def test_extract_complexity_basic(metadata_extractor):
@@ -89,7 +94,7 @@ else:
 
     complexity = metadata_extractor.extract_complexity(code)
     # Base complexity (1) + if (1) + elif (1) + else (1) = 4
-    assert complexity >= 4  # Based on actual implementation using "if ", "elif ", "else "
+    assert complexity >= COMPLEXITY_IF_ELIF_ELSE  # Based on actual implementation using "if ", "elif ", "else "
 
 
 def test_extract_complexity_with_loops(metadata_extractor):
@@ -100,7 +105,7 @@ def test_extract_complexity_with_loops(metadata_extractor):
 
     complexity = metadata_extractor.extract_complexity(code)
     # Base complexity (1) + for  (1) + if (1) = 3 (using "for " and "if ")
-    assert complexity >= 3
+    assert complexity >= COMPLEXITY_FOR_IF
 
 
 def test_extract_complexity_with_keywords(metadata_extractor):
@@ -114,7 +119,7 @@ def test_extract_complexity_with_keywords(metadata_extractor):
     complexity = metadata_extractor.extract_complexity(code)
     # Base complexity (1) + if (1) + for (1) + if (1) + while (1) = 5 (based on actual implementation)
     # The " && " and " || " keywords don't match "and", "or" in Python
-    assert complexity == 5
+    assert complexity == COMPLEXITY_MULTIPLE
 
 
 def test_extract_tags_and_categories_basic(metadata_extractor):

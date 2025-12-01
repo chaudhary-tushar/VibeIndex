@@ -102,21 +102,21 @@ def test_language_config_language_availability():
     assert isinstance(LanguageConfig.LANGUAGES, dict)
 
     # All languages in LANGUAGE_MAP that have parsers should be in LANGUAGES
-    for ext, lang in LanguageConfig.LANGUAGE_MAP.items():
+    for lang in LanguageConfig.LANGUAGE_MAP.values():
         # Not all languages may have parsers loaded, but the mapping should exist
         assert isinstance(lang, str)
 
 
 def test_language_config_language_map_completeness():
     """Test that all languages in QUERIES have corresponding parser definitions"""
-    for lang in LanguageConfig.QUERIES.keys():
+    for lang in LanguageConfig.QUERIES:
         assert lang in LanguageConfig.LANGUAGES, f"Language {lang} has query but no parser"
 
 
 def test_language_config_identifiers():
     """Test that language identifiers are consistent"""
     # Check that language identifiers match between different parts of config
-    for ext, lang in LanguageConfig.LANGUAGE_MAP.items():
+    for lang in LanguageConfig.LANGUAGE_MAP.values():
         # All language identifiers should be lowercase
         assert lang.islower(), f"Language identifier {lang} should be lowercase"
 

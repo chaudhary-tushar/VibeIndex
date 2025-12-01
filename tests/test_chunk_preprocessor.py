@@ -2,6 +2,15 @@ import pytest
 
 from src.preprocessing.chunk import ChunkPreprocessor
 
+# Constants for test magic values
+NO_DUPS_CHUNK_COUNT = 3
+DUPS_REMOVED_COUNT = 2
+DEDUP_CHUNK_COUNT = 2
+ENHANCED_CHUNK_COUNT = 2
+VALID_CHUNK_COUNT = 2
+ENHANCED_STATS_COUNT = 2
+DUPLICATES_STATS_COUNT = 1
+
 
 def test_chunk_preprocessor_initialization():
     """Test ChunkPreprocessor initialization"""
@@ -26,10 +35,10 @@ def test_chunk_preprocessor_deduplicate_no_duplicates():
 
     result = preprocessor.deduplicate(chunks)
 
-    assert len(result) == 3
+    assert len(result) == NO_DUPS_CHUNK_COUNT
     assert result == chunks
     assert preprocessor.stats["duplicates"] == 0
-    assert len(preprocessor.dedup_hashes) == 3
+    assert len(preprocessor.dedup_hashes) == NO_DUPS_CHUNK_COUNT
 
 
 def test_chunk_preprocessor_deduplicate_with_duplicates():
@@ -47,11 +56,12 @@ def test_chunk_preprocessor_deduplicate_with_duplicates():
     result = preprocessor.deduplicate(chunks)
 
     # Should have 3 chunks: func1, func2, func3 (duplicates removed)
-    assert len(result) == 3
+    unique_chunk_count = 3
+    assert len(result) == unique_chunk_count
     assert result[0]["code"] == "def func1(): pass"
     assert result[1]["code"] == "def func2(): pass"
     assert result[2]["code"] == "def func3(): pass"
-    assert preprocessor.stats["duplicates"] == 2  # Two duplicates removed
+    assert preprocessor.stats["duplicates"] == DUPS_REMOVED_COUNT  # Two duplicates removed
 
 
 def test_chunk_preprocessor_deduplicate_empty_list():
@@ -209,7 +219,8 @@ def test_chunk_preprocessor_process_chunks():
 
     # Step 1: Deduplicate
     deduplicated = preprocessor.deduplicate(chunks)
-    assert len(deduplicated) == 2  # One duplicate removed
+    deduplicated_chunk_count = 2  # One duplicate removed
+    assert len(deduplicated) == deduplicated_chunk_count
 
     # Step 2: Enhance
     enhanced_chunks = []
@@ -217,16 +228,16 @@ def test_chunk_preprocessor_process_chunks():
         enhanced = preprocessor.enhance_chunk(chunk)
         enhanced_chunks.append(enhanced)
 
-    assert len(enhanced_chunks) == 2
+    assert len(enhanced_chunks) == ENHANCED_CHUNK_COUNT
     assert all("embedding_text" in chunk for chunk in enhanced_chunks)
 
     # Step 3: Validate (all should be valid in this case)
     valid_chunks = [chunk for chunk in enhanced_chunks if preprocessor.validate_chunk(chunk)]
-    assert len(valid_chunks) == 2
+    assert len(valid_chunks) == VALID_CHUNK_COUNT
 
     # Check stats
     assert preprocessor.stats["duplicates"] == 1
-    assert preprocessor.stats["enhanced"] == 2
+    assert preprocessor.stats["enhanced"] == ENHANCED_STATS_COUNT
     assert preprocessor.stats["too_large"] == 0
 
 

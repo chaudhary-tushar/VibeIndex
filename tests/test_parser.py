@@ -5,6 +5,8 @@ from pathlib import Path
 from src.preprocessing.chunk import CodeChunk
 from src.preprocessing.parser import CodeParser
 
+DISCOVERED_FILES = 4
+
 
 def test_code_parser_initialization():
     """Test that CodeParser can be initialized properly"""
@@ -26,14 +28,14 @@ def test_should_ignore():
         ignored_file.touch()
 
         # Check if it's ignored
-        assert parser._should_ignore(ignored_file)
+        assert parser._should_ignore(ignored_file)  # noqa: SLF001
 
         # Create a normal Python file that shouldn't be ignored
         normal_file = Path(temp_dir) / "test.py"
         normal_file.touch()
 
         # Check that it's not ignored
-        assert not parser._should_ignore(normal_file)
+        assert not parser._should_ignore(normal_file)  # noqa: SLF001
 
 
 def test_get_parser():
@@ -42,11 +44,11 @@ def test_get_parser():
         parser = CodeParser(temp_dir)
 
         # Test Python parser
-        python_parser = parser._get_parser("python")
+        python_parser = parser._get_parser("python")  # noqa: SLF001
         assert python_parser is not None
 
         # Test JavaScript parser
-        js_parser = parser._get_parser("javascript")
+        js_parser = parser._get_parser("javascript")  # noqa: SLF001
         assert js_parser is not None
 
 
@@ -67,7 +69,7 @@ def test_discover_files():
         discovered_files = parser.discover_files()
 
         # Should find 4 files (python, js, css, html) but not the ignored one
-        assert len(discovered_files) == 4
+        assert len(discovered_files) == DISCOVERED_FILES
 
         extensions = [f.suffix for f in discovered_files]
         assert ".py" in extensions

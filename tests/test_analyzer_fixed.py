@@ -9,12 +9,19 @@ import pytest
 from src.preprocessing.analyzer import Analyzer
 from src.preprocessing.chunk import CodeChunk
 
+# Constants for magic values
+MIN_METHOD_CHUNKS_IN_CLASS = 2
+CSS_CHUNKS_COUNT_TEST = 2
+ANALYSIS_COMPLEXITY_IF_TEST = 2
+MIN_CHUNKS_EXPECTED = 3
+CALCULATE_COMPLEXITY_EXPECTED = 3
+
 
 # Mock tree-sitter Node
 class MockNode:
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
-        type,
+        node_type,
         text,
         start_point=(0, 0),
         end_point=(0, 0),
@@ -113,7 +120,7 @@ class MyClass {
 
     # After debugging, we know the function will return 3 elements: function, class, and methods within class
     # The actual behavior is that we get function, class, and the methods in the class
-    assert len(chunks) >= 3  # At least function, class, and methods in the class
+    assert len(chunks) >= MIN_CHUNKS_EXPECTED  # At least function, class, and methods in the class
 
     # Find the specific chunks
     function_chunks = [c for c in chunks if c.type == "function" and c.name == "myFunction"]
@@ -122,7 +129,7 @@ class MyClass {
 
     assert len(function_chunks) >= 1
     assert len(class_chunks) >= 1
-    assert len(method_chunks) >= 2  # constructor and myMethod
+    assert len(method_chunks) >= MIN_METHOD_CHUNKS_IN_CLASS
 
 
 def test_extract_html_chunks(analyzer):
@@ -217,7 +224,7 @@ def test_extract_css_chunks(analyzer):
     )
 
     chunks = analyzer.extract_css_chunks(root_node, css_code.encode("utf-8"), "test.css", "css")
-    assert len(chunks) == 2
+    assert len(chunks) == CSS_CHUNKS_COUNT_TEST
     # Adjust names based on actual behavior
     selectors = [chunk.name for chunk in chunks]
     assert ".my-class" in selectors
@@ -283,8 +290,8 @@ def test_find_called_symbols(analyzer):
 
 def test_calculate_complexity(analyzer):
     code = "if x > 0 and y < 0: ..."
-    complexity = analyzer._calculate_complexity(code)
-    assert complexity == 3  # 1 (base) + 1 (if) + 1 (and)
+    complexity = analyzer._calculate_complexity(code)  # noqa: SLF001
+    assert complexity == CALCULATE_COMPLEXITY_EXPECTED
 
 
 def test_extract_dependencies(analyzer):
@@ -293,12 +300,10 @@ import os
 from my_module.sub import MyClass
 import pandas as pd
 """
-    deps = analyzer._extract_dependencies(code, "python")
+    deps = analyzer._extract_dependencies(code, "python")  # noqa: SLF001
     assert "os" in deps
     assert "my_module" in deps
     assert "pandas" in deps
-
-
 
 
 def test_add_code_metadata(analyzer):
@@ -326,7 +331,7 @@ def test_add_analysis_metadata(analyzer):
         language="python",
     )
     analyzer.add_analysis_metadata(chunk)
-    assert chunk.analysis["complexity"] == 2  # Changed to 2, as per discussion
+    assert chunk.analysis["complexity"] == ANALYSIS_COMPLEXITY_IF_TEST
 
 
 def test_add_relationship_metadata(analyzer):

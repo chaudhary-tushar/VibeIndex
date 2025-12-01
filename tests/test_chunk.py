@@ -22,7 +22,8 @@ def test_codechunk_creation():
     assert chunk.language == "python"
     assert chunk.start_line == 1
     assert chunk.end_line == 1
-    assert chunk.id != ""  # ID should be auto-generated
+    assert chunk.id is not None  # ID should be auto-generated
+    assert bool(chunk.id)  # ID should be auto-generated
     assert chunk.qualified_name == "test.test_function"  # Generated from name and file stem
 
 
@@ -39,7 +40,7 @@ def test_codechunk_default_values():
     )
 
     # Check default values
-    assert chunk.id != ""
+    assert chunk.id
     assert chunk.qualified_name == "test.test_function"
     assert chunk.docstring is None
     assert chunk.signature is None
@@ -100,8 +101,9 @@ def test_codechunk_id_generation():
     # IDs should be different for different name/line combinations
     assert chunk1.id != chunk2.id
     # IDs should be 12 characters as per implementation
-    assert len(chunk1.id) == 12
-    assert len(chunk2.id) == 12
+    id_length_expected = 12
+    assert len(chunk1.id) == id_length_expected
+    assert len(chunk2.id) == id_length_expected
 
 
 def test_codechunk_qualified_name_generation():
@@ -167,7 +169,9 @@ def test_codechunk_to_dict():
     assert chunk_dict["start_line"] == 1
     assert chunk_dict["end_line"] == 1
     assert chunk_dict["docstring"] == "A test function"
-    assert chunk_dict["complexity"] == 3
+    complexity_test_value = 3
+    complexity_test_value = 3
+    assert chunk_dict["complexity"] == complexity_test_value
 
 
 def test_codechunk_metadata_structures():
@@ -231,7 +235,8 @@ def test_codechunk_with_custom_values():
     assert chunk.qualified_name == "test.TestClass"
     assert chunk.docstring == "Custom docstring"
     assert chunk.signature == "class TestClass:"
-    assert chunk.complexity == 10
+    complexity_value = 10
+    assert chunk.complexity == complexity_value
     assert chunk.parent == "ParentClass"
     assert chunk.dependencies == ["os"]
     assert chunk.references == ["sys"]

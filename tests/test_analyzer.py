@@ -9,28 +9,37 @@ import pytest
 from src.preprocessing.analyzer import Analyzer
 from src.preprocessing.chunk import CodeChunk
 
+# Constants for magic values
+MIN_METHOD_CHUNKS = 2
+MIN_HTML_ELEMENT_CHUNKS = 2
+CSS_CHUNKS_COUNT = 2
+BASE_COMPLEXITY_IF_AND = 3
+ANALYSIS_COMPLEXITY_IF = 2
+MIN_NAME_LENGTH_FUNCTION = 3
+MIN_NAME_LENGTH_CLASS = 2
+MIN_NAME_LENGTH_METHOD = 3
+MIN_NAME_LENGTH_CONSTRUCTOR = 5
+
 
 # Mock tree-sitter Node
 class MockNode:
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
-        type,
+        node_type,
         text,
         start_point=(0, 0),
         end_point=(0, 0),
         children=None,
         fields=None,
-        start_byte=None,
-        end_byte=None,
+        **kwargs,
     ):
-        self.type = type
+        self.type = node_type
         # Store text as string and calculate byte positions properly
         self.text = text
-        self.start_byte = start_byte if start_byte is not None else 0
-        if end_byte is not None:
-            self.end_byte = end_byte
-        else:
-            self.end_byte = self.start_byte + len(text.encode("utf-8"))
+        self.start_byte = kwargs.get("start_byte", 0)
+        self.end_byte = kwargs.get(
+            "end_byte", self.start_byte + len(text.encode("utf-8"))
+        )
         self.start_point = start_point
         self.end_point = end_point
         self.children = children or []
@@ -138,16 +147,20 @@ class MyClass {
     # Should have function, class, and methods
     assert len(function_chunks) >= 1
     assert len(class_chunks) >= 1
-    assert len(method_chunks) >= 2
+    assert len(method_chunks) >= MIN_METHOD_CHUNKS
 
     # Check that specific names are present - allowing for potential truncations
     names = [c.name.strip() for c in chunks]
     # The actual names extracted might be truncated based on the byte positions
     # So let's verify that at least the base names are contained in the extracted names
-    assert any("myFunction" in name or name in "myFunction" for name in names if len(name) >= 3)
-    assert any("MyClass" in name or name in "MyClass" for name in names if len(name) >= 2)
-    assert any("myMethod" in name or name in "myMethod" for name in names if len(name) >= 3)
-    assert any("constructor" in name or name in "constructor" for name in names if len(name) >= 5)
+    assert any("myFunction" in name or name in "myFunction" for name in names if len(name) >= MIN_NAME_LENGTH_FUNCTION)
+    assert any("MyClass" in name or name in "MyClass" for name in names if len(name) >= MIN_NAME_LENGTH_CLASS)
+    assert any("myMethod" in name or name in "myMethod" for name in names if len(name) >= MIN_NAME_LENGTH_METHOD)
+    assert any(
+        "constructor" in name or name in "constructor"
+        for name in names
+        if len(name) >= MIN_NAME_LENGTH_CONSTRUCTOR
+    )
 
 
 def test_extract_html_chunks(analyzer):
@@ -211,7 +224,7 @@ def test_extract_html_chunks(analyzer):
 
     # Should have meaningful chunks since content exceeds size threshold
     html_element_chunks = [c for c in chunks if c.type == "html_element"]
-    assert len(html_element_chunks) >= 2  # Should have both section and div
+    assert len(html_element_chunks) >= MIN_HTML_ELEMENT_CHUNKS  # Should have both section and div
 
     names = [c.name for c in html_element_chunks]
     assert "section" in names
@@ -251,7 +264,7 @@ def test_extract_css_chunks(analyzer):
     )
 
     chunks = analyzer.extract_css_chunks(root_node, css_code.encode("utf-8"), "test.css", "css")
-    assert len(chunks) == 2
+    assert len(chunks) == CSS_CHUNKS_COUNT
 
     # Extract names to check existence
     names = [chunk.name for chunk in chunks]
@@ -311,8 +324,8 @@ def test_find_called_symbols(analyzer):
 
 def test_calculate_complexity(analyzer):
     code = "if x > 0 and y < 0: ..."
-    complexity = analyzer._calculate_complexity(code)
-    assert complexity == 3  # 1 (base) + 1 (if) + 1 (and)
+    complexity = analyzer._calculate_complexity(code)  # noqa: SLF001
+    assert complexity == BASE_COMPLEXITY_IF_AND
 
 
 def test_extract_dependencies(analyzer):
@@ -321,11 +334,10 @@ import os
 from my_module.sub import MyClass
 import pandas as pd
 """
-    deps = analyzer._extract_dependencies(code, "python")
+    deps = analyzer._extract_dependencies(code, "python")  # noqa: SLF001
     assert "os" in deps
     assert "my_module" in deps
     assert "pandas" in deps
-
 
 
 def test_add_code_metadata(analyzer):
@@ -353,7 +365,7 @@ def test_add_analysis_metadata(analyzer):
         language="python",
     )
     analyzer.add_analysis_metadata(chunk)
-    assert chunk.analysis["complexity"] == 2  # Changed to 2, as per discussion
+    assert chunk.analysis["complexity"] == ANALYSIS_COMPLEXITY_IF
 
 
 def test_add_relationship_metadata(analyzer):
