@@ -1,30 +1,22 @@
 """
-Consolidated Qdrant configuration
-Combines Qdrant-related settings from multiple sources
+Qdrant configuration with connectivity check
 """
 
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic_settings import BaseSettings
+from qdrant_client import QdrantClient
 from qdrant_client.models import Distance
 
 
 class QdrantConfig(BaseSettings):
     """
-    Consolidated configuration for Qdrant vector database
-
-    This class combines settings from:
-    - src/retrieval/search.py (QdrantConfig dataclass)
-    - old_code/code_rag.py (Qdrant connection configuration)
-    - config/settings.py (qdrant-related settings)
+    Configuration for Qdrant vector database
     """
 
-    # Connection configuration
-    host: str = Field(default="localhost", description="Qdrant server host")
-    port: int = Field(default=6333, description="Qdrant server port")
+    host: str = Field(..., description="Qdrant server host")
+    port: int = Field(..., description="Qdrant server port")
     qdrant_api_key: str = Field(default="", description="API key for Qdrant Cloud (optional)")
-
-    # Collection configuration
     collection_prefix: str = Field(default="tipsy", description="Prefix for collection names")
 
     # Vector configuration
@@ -57,9 +49,26 @@ class QdrantConfig(BaseSettings):
             return f"https://{self.host}:{self.port}"
         return f"http://{self.host}:{self.port}"
 
-    def get_client_config(self) -> dict:
-        """Get configuration dictionary for QdrantClient"""
-        config = {"host": self.host, "port": self.port}
-        if self.qdrant_api_key:
-            config["api_key"] = self.qdrant_api_key
-        return config
+    def ping(self) -> bool:
+        """
+        Check if the Qdrant service is reachable by checking the service health
+        """
+        try:
+            # Create a Qdrant client instance
+            client = QdrantClient(
+                host=self.host, port=self.port, api_key=self.qdrant_api_key if self.qdrant_api_key else None
+            )
+
+            # Try to get the cluster info to verify connection
+            client.get_collections()
+            return True
+        except Exception:
+            return False
+
+    def get_client(self) -> QdrantClient:
+        """
+        Get a Qdrant client instance with the configured settings
+        """
+        return QdrantClient(
+            host=self.host, port=self.port, api_key=self.qdrant_api_key if self.qdrant_api_key else None
+        )
