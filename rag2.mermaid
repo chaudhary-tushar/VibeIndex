@@ -15,7 +15,7 @@ graph TB
     subgraph "Embedding Layer"
         H[EmbeddingGamma Model<br/>Docker Container]
         I[Batch Processor]
-        J[Embedding Quality Validator]
+        J[Embedding Quality Validator] %% TODO: Move validation logic to separate quality_validator.py
     end
 
     subgraph "Vector Database"
@@ -25,24 +25,24 @@ graph TB
     end
 
     subgraph "Initial Retrieval Layer"
-        N[Query Processor]
+        N[Query Processor] %% TODO: Implement query processing logic
         O[Hybrid Search:<br/>- Vector similarity<br/>- Keyword search<br/>- Metadata filters]
-        P[Initial Candidate Selection<br/>Top-K results]
+        P[Initial Candidate Selection<br/>Top-K results] %% TODO: Implement candidate selection
     end
 
-    subgraph "Reranking Layer"
-        Q[Reranking Input Processor<br/>Context + Candidates]
-        R[Cross-Encoder Model<br/>Sentence Transformers]
-        S[Relevance Scoring<br/>Query-Document pairs]
-        T[Semantic Similarity<br/>Re-embedding]
-        U[Final Ranking Algorithm<br/>Weighted score fusion]
-        V[Quality Assurance Filter<br/>Threshold validation]
+    subgraph "Reranking Layer" %% ALL COMPONENTS IMPLEMENTED
+        Q[Reranking Input Processor<br/>Context + Candidates] %% [IMPLEMENTED]
+        R[Cross-Encoder Model<br/>Sentence Transformers] %% [IMPLEMENTED]
+        S[Relevance Scoring<br/>Query-Document pairs] %% [IMPLEMENTED]
+        T[Semantic Similarity<br/>Re-embedding] %% [IMPLEMENTED]
+        U[Final Ranking Algorithm<br/>Weighted score fusion] %% [IMPLEMENTED]
+        V[Quality Assurance Filter<br/>Threshold validation] %% [IMPLEMENTED]
     end
 
     subgraph "Generation Layer"
         W[Mistral Code Model]
-        X[Context Builder]
-        Y[Prompt Constructor]
+        X[Context Builder] %% TODO: Complete query-time context builder
+        Y[Prompt Constructor] %% TODO: Complete query-time prompt constructor
     end
 
     A --> D
