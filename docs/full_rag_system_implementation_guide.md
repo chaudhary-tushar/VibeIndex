@@ -1,22 +1,3 @@
-Below is the **standalone, end-to-end Markdown file** you requested.
-It contains:
-
-* A clean directory structure
-* Phased implementation steps
-* LangChain + Qdrant + Neo4j + Playwright/CDP integration plan
-* Vector RAG, Graph RAG, and Agentic RAG
-* Reranking strategy
-* A Mermaid architecture diagram
-* No code, just actionable steps
-
-You can **copy this file directly into your repo** as:
-
-```
-docs/full_rag_system_implementation_guide.md
-```
-
----
-
 # # 📘 Full RAG System Implementation Guide
 
 ### *Vector RAG + Graph RAG + Agentic RAG with Python, LangChain, Qdrant, Neo4j, and Playwright/CDP*
