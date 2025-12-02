@@ -1,0 +1,47 @@
+graph TB
+    subgraph "Data Ingestion [Current]"
+        Repo[Code Repo]
+        Prep[Preprocessing<br/>AST Parser, Chunker, Deps]
+    end
+
+    subgraph "Vector Embeddings [Current+]"
+        Embed[Gamma Embedder<br/>Batch + Validator]
+        Qdrant[Qdrant<br/>Hybrid Vector/Keyword]
+    end
+
+    subgraph "Graph Layer [New: Phase 2]"
+        GBuild[Graph Builder<br/>Chunks → Nodes/Edges]
+        Neo4j[Neo4j KG<br/>:Chunk, :Symbol<br/>DEPENDS_ON, REFERENCES]
+    end
+
+    subgraph "Agentic Orchestration [LangGraph: Phase 3]"
+        Router[Query Router Agent]
+        RAgent[Retriever Agent<br/>Vector Tools]
+        GAgent[Graph Navigator Agent<br/>Cypher Traversal]
+        SAgent[Synthesizer Agent<br/>Context Fusion]
+    end
+
+    subgraph "Hybrid Retrieval [Phase 4]"
+        Hybrid[Vector+Graph+Rerank<br/>Score Fusion]
+    end
+
+    subgraph "Response Generation [Current+]"
+        Gen[Mistral Generator<br/>Prompt Builder]
+    end
+
+    Repo --> Prep
+    Prep --> Embed --> Qdrant
+    Prep --> GBuild --> Neo4j
+    UserQuery[User Query] --> Router
+    Router --> RAgent --> Qdrant
+    Router --> GAgent --> Neo4j
+    RAgent --> Hybrid
+    GAgent --> Hybrid
+    Hybrid --> SAgent --> Gen --> Answer[Final Answer]
+
+    classDef current fill:#e1f5ff
+    classDef new fill:#fff2cc
+    classDef agent fill:#ffe1e1
+    class Prep,Embed,Qdrant,Gen current
+    class GBuild,Neo4j,Hybrid new
+    class Router,RAgent,GAgent,SAgent agent

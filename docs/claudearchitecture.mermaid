@@ -1,0 +1,186 @@
+graph TB
+    subgraph "Data Ingestion"
+        A["📂 Source Code Files<br/>(Python, JS, HTML, CSS, Markdown, PDF)"]
+    end
+
+    subgraph "Preprocessing Layer"
+        B["🔍 Parser<br/>(Tree-sitter + AST Analysis)"]
+        C["📊 Analyzer<br/>(Metadata Extraction)"]
+        D["🔗 DependencyMapper<br/>(Symbol Resolution)"]
+        E["✨ Preprocessor<br/>(Dedup + Enrichment)"]
+    end
+
+    subgraph "Chunk Repository"
+        F["📦 CodeChunk Objects<br/>(Rich Metadata:<br/>dependencies, references,<br/>defines, relationships)"]
+    end
+
+    subgraph "Parallel Indexing Paths"
+        subgraph "Vector RAG Path"
+            G["🧠 Embedding Generator<br/>(Ollama/OpenAI)"]
+            H["✅ Quality Validator<br/>(Magnitude, Variance, NaN Checks)"]
+            I["🔢 Qdrant Vector DB<br/>(Dense: 768-dim COSINE<br/>Sparse: BM25)"]
+        end
+
+        subgraph "Graph RAG Path [NEW]"
+            J["🏗️ GraphBuilder<br/>(CodeChunk → Neo4j Nodes/Edges)"]
+            K["🗂️ Neo4j Knowledge Graph<br/>(CodeChunk, Symbol Nodes<br/>DEPENDS_ON, REFERENCES,<br/>INHERITS_FROM Edges)"]
+        end
+    end
+
+    subgraph "Query Processing"
+        subgraph "Query Routing [NEW]"
+            L["🚦 Query Router<br/>(Simple → Vector,<br/>Complex → Agent,<br/>Graph-heavy → Graph)"]
+        end
+
+        subgraph "Vector Retrieval (Existing)"
+            M["🔍 Hybrid Search<br/>(Dense [0.7] + Sparse [0.3])"]
+            N["📝 Reranking<br/>(Cross-Encoder:<br/>ms-marco-MiniLM-L-6-v2)"]
+        end
+
+        subgraph "Graph Retrieval [NEW]"
+            O["🧭 Query Engine<br/>(Traverse Dependencies,<br/>Find Neighbors,<br/>Trace Paths)"]
+            P["📊 Graph-Aware Reranker<br/>(Connectivity Score +<br/>Cross-Encoder Score)"]
+        end
+
+        subgraph "Agentic Retrieval [NEW]"
+            Q["🤖 Agent Executor<br/>(ReAct Loop:<br/>Observe → Act → Reason)"]
+            R["🛠️ Tool Registry"]
+            S["🔧 Tools"]
+        end
+    end
+
+    subgraph "Agent Tools [NEW]"
+        S1["code_search_tool<br/>(Semantic search)"]
+        S2["graph_query_tool<br/>(Dependency analysis)"]
+        S3["dependency_analyzer_tool<br/>(Impact analysis)"]
+        S4["test_locator_tool<br/>(Related tests)"]
+        S5["documentation_tool<br/>(Code context)"]
+    end
+
+    subgraph "Context Management [NEW]"
+        T["💾 ConversationMemory<br/>(History + Context Window)"]
+        U["📌 Symbol Index<br/>(Quick Lookups)"]
+    end
+
+    subgraph "Result Fusion [NEW]"
+        V["🎯 Hybrid Combiner<br/>(Merge Vector + Graph +<br/>Agent Results)"]
+    end
+
+    subgraph "Generation Layer"
+        W["📝 Context Builder<br/>(Select Best Snippets)"]
+        X["🎨 Prompt Constructor<br/>(Template + Context)"]
+        Y["🧠 LLM Generator<br/>(Ollama/OpenAI)"]
+    end
+
+    subgraph "Output"
+        Z["✨ Structured Answer<br/>(Code + Explanation +<br/>Source Attribution)"]
+    end
+
+    subgraph "API Layer"
+        AA["🔌 FastAPI Endpoints<br/>POST /query/vector<br/>POST /query/graph<br/>POST /query/agent<br/>POST /query/hybrid<br/>GET /graph/nodes"]
+    end
+
+    %% Main flow
+    A -->|Parse & Extract| B
+    B -->|Analyze AST| C
+    C -->|Map Dependencies| D
+    D -->|Dedup & Enrich| E
+    E -->|Create| F
+
+    %% Parallel paths
+    F -->|Generate| G
+    G -->|Validate| H
+    H -->|Index| I
+
+    F -->|Convert| J
+    J -->|Insert| K
+
+    %% Query routing
+    L -->|Vector Query| M
+    L -->|Graph Query| O
+    L -->|Complex Query| Q
+
+    %% Vector path
+    M -->|Top Candidates| N
+    N -->|Ranked Results| V
+
+    %% Graph path
+    O -->|Neighbors + Paths| P
+    P -->|Ranked Results| V
+
+    %% Agent path (detailed)
+    Q -->|Route to Tools| R
+    R -->|Execute| S
+    S -->|search| S1
+    S -->|query| S2
+    S -->|analyze| S3
+    S -->|locate| S4
+    S -->|doc| S5
+
+    S1 --> |Vector Search| I
+    S2 --> |Traverse Graph| K
+    S3 --> |Query Graph| K
+    S4 --> |Search| I
+    S5 --> |Search| I
+
+    Q -->|Store Context| T
+    Q -->|Multi-turn| T
+
+    %% Result fusion
+    V -->|Merged Results| W
+
+    %% Generation
+    W -->|Select Context| X
+    X -->|Construct| Y
+    Y -->|Generate| Z
+
+    %% API exposure
+    L -->|HTTP| AA
+    M -->|HTTP| AA
+    O -->|HTTP| AA
+    Q -->|HTTP| AA
+    V -->|HTTP| AA
+
+    %% Styling
+    style A fill:#e1f5fe
+    style B fill:#e1f5fe
+    style C fill:#e1f5fe
+    style D fill:#e1f5fe
+    style E fill:#e1f5fe
+    style F fill:#fff3e0
+
+    style G fill:#c8e6c9
+    style H fill:#c8e6c9
+    style I fill:#c8e6c9
+    style J fill:#ffe0b2
+    style K fill:#ffe0b2
+
+    style L fill:#f3e5f5
+    style M fill:#c8e6c9
+    style N fill:#fff9c4
+    style O fill:#ffe0b2
+    style P fill:#ffe0b2
+    style Q fill:#f3e5f5
+    style R fill:#f3e5f5
+    style S fill:#f3e5f5
+    style S1 fill:#f3e5f5
+    style S2 fill:#f3e5f5
+    style S3 fill:#f3e5f5
+    style S4 fill:#f3e5f5
+    style S5 fill:#f3e5f5
+
+    style T fill:#f3e5f5
+    style U fill:#f3e5f5
+    style V fill:#f3e5f5
+
+    style W fill:#ffebee
+    style X fill:#ffebee
+    style Y fill:#ffebee
+    style Z fill:#ffcdd2
+
+    style AA fill:#f0f4c3
+
+    classDef vectorLayer fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    classDef graphLayer fill:#ffe0b2,stroke:#e65100,stroke-width:2px
+    classDef agentLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef generationLayer fill:#ffebee,stroke:#c62828,stroke-width:2px
