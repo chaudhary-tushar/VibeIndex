@@ -4,17 +4,22 @@ Metadata extraction from code chunks
 
 from .chunk import CodeChunk
 
+HIGH_COMPLEXITY = 10
+MEDIUM_COMPLEXITY = 5
+LARGE_SIZE = 50
+MEDIUM_SIZE = 20
+
 
 class MetadataExtractor:
     """Handles extraction of semantic metadata from code"""
 
     def extract_docstring(self, node, code_bytes: bytes) -> str | None:
         """Extract docstring from AST node based on the language"""
-        if node.type in ["function_definition", "class_definition"]:
-            # code_str = code_bytes.decode('utf-8')
+        if node.type in {"function_definition", "class_definition"}:
+            # code_str = code_bytes.decode('utf-8')  # noqa: ERA001
 
             # For Python, docstrings are stored as the first expression in the function/class
-            if node.type == "function_definition" or node.type == "class_definition":
+            if node.type in {"function_definition", "class_definition"}:
                 # Look for the first child that is an expression statement containing a string
                 for child in node.children:
                     if child.type == "expression_statement":
@@ -26,16 +31,14 @@ class MetadataExtractor:
                             end_byte = string_node.end_byte
                             docstring = code_bytes[start_byte:end_byte].decode("utf-8")
                             # Remove quotes
-                            docstring = docstring.strip().strip('"""').strip("'''").strip('"').strip("'")
-                            return docstring
+                            return docstring.strip().strip('"""').strip("'''").strip('"').strip("'")  # noqa: B005
                     elif child.type == "string":
                         # Direct string child
                         start_byte = child.start_byte
                         end_byte = child.end_byte
                         docstring = code_bytes[start_byte:end_byte].decode("utf-8")
                         # Remove quotes
-                        docstring = docstring.strip().strip('"""').strip("'''").strip('"').strip("'")
-                        return docstring
+                        return docstring.strip().strip('"""').strip("'''").strip('"').strip("'")  # noqa: B005
 
         return None
 
@@ -65,18 +68,18 @@ class MetadataExtractor:
         tags.append(f"type:{chunk.type}")
 
         # Complexity-based tags
-        if chunk.complexity >= 10:
+        if chunk.complexity >= HIGH_COMPLEXITY:
             tags.append("complexity:high")
-        elif chunk.complexity >= 5:
+        elif chunk.complexity >= MEDIUM_COMPLEXITY:
             tags.append("complexity:medium")
         else:
             tags.append("complexity:low")
 
         # Size-based tags
         line_count = chunk.end_line - chunk.start_line + 1
-        if line_count > 50:
+        if line_count > LARGE_SIZE:
             tags.append("size:large")
-        elif line_count > 20:
+        elif line_count > MEDIUM_SIZE:
             tags.append("size:medium")
         else:
             tags.append("size:small")
@@ -104,7 +107,7 @@ class MetadataExtractor:
             chunk.metadata = {
                 "line_count": chunk.end_line - chunk.start_line + 1,
                 "has_tests": any("test" in chunk.name.lower() for chunk in [chunk]),  # simplistic check
-                "is_entry_point": chunk.name in ["main", "__main__", "app", "application"],
+                "is_entry_point": chunk.name in {"main", "__main__", "app", "application"},
             }
 
         return chunk

@@ -21,7 +21,7 @@ class DependencyMapper:
             deps.update(self._extract_python_imports(code))
             deps.update(self._extract_python_symbol_usage(code, symbol_index))
 
-        elif language in ["javascript", "typescript"]:
+        elif language in {"javascript", "typescript"}:
             deps.update(self._extract_js_imports(code))
             deps.update(self._extract_js_symbol_usage(code, symbol_index))
 
@@ -37,8 +37,8 @@ class DependencyMapper:
         """Extract Python import statements"""
         deps = set()
 
-        for line in code.split("\n"):
-            line = line.strip()
+        for fline in code.split("\n"):
+            line = fline.strip()
             if line.startswith("import "):
                 # import A, B as C → extract A, B
                 parts = line[7:].split(",")
@@ -84,10 +84,7 @@ class DependencyMapper:
             "super",
         }
 
-        filtered_symbols = []
-        for sym in symbols:
-            if sym not in common and not sym.startswith("_"):
-                filtered_symbols.append(sym)
+        filtered_symbols = [sym for sym in symbols if sym not in common and not sym.startswith("_")]
 
         # If we have a symbol index, only include symbols that are defined in the project
         if symbol_index:
@@ -108,10 +105,10 @@ class DependencyMapper:
         import_re = re.compile(r'import\s+(?:[\w{}\*\s,]+\s+from\s+)?[\'"]([^\'"]+)[\'"]')
         require_re = re.compile(r'require\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)')
 
-        for line in code.split("\n"):
-            line = line.strip()
+        for fline in code.split("\n"):
+            line = fline.strip()
             # Skip comments
-            if line.startswith("//") or line.startswith("/*"):
+            if line.startswith(("//", "/*")):
                 continue
 
             # Extract imports
@@ -156,7 +153,7 @@ class DependencyMapper:
             "Error",
         }
 
-        candidates = candidates - builtins
+        candidates -= builtins
 
         if symbol_index:
             for sym in candidates:

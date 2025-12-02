@@ -1,35 +1,38 @@
-# ruff :noqa
 """
 Code analysis and parsing logic for different languages
 """
 
+import builtins
+import contextlib
 import hashlib
 import re
 from pathlib import Path
-from src.config import settings
-from src.config.data_store import save_data
-
 
 import libcst as cst
 from radon.visitors import ComplexityVisitor
 from rich.console import Console
 from tree_sitter import Node
 
+from src.config import settings
+from src.config.data_store import save_data
+
 from .chunk import CodeChunk
 
 console = Console()
+
+TINY_TAGS = 50
 
 
 class Analyzer:
     """Handles code analysis and parsing for different languages"""
 
-    def extract_js_chunks(self, node: Node, code_bytes: bytes, relative_path: str, language: str) -> list[CodeChunk]:
+    def extract_js_chunks(self, node: Node, code_bytes: bytes, relative_path: str, language: str) -> list[CodeChunk]:  # noqa: C901, PLR0915
         """Extracts functions, classes, and other significant chunks from JavaScript/TypeScript"""
         chunks = []
 
-        def traverse(node: Node, parent_name=None):
+        def traverse(node: Node, parent_name=None):  # noqa: C901, PLR0912, PLR0915
             # Handle function declarations and expressions
-            if node.type in {
+            if node.type in {  # noqa: PLR1702
                 "function_declaration",
                 "function_expression",
                 "generator_function",
@@ -119,7 +122,7 @@ class Analyzer:
                     called_symbols = self.find_called_symbols(code, language, {})
 
                     chunk_type = "method"
-                    if node.type == "public_field_definition" or node.type == "private_field_definition":
+                    if node.type in {"public_field_definition", "private_field_definition"}:
                         chunk_type = "property"
                     elif name.startswith("get "):
                         chunk_type = "getter"
@@ -148,7 +151,7 @@ class Analyzer:
             elif node.type in {"variable_declaration", "lexical_declaration"}:
                 # Process each declarator in the declaration
                 for child in node.children:
-                    if child.type in ["variable_declarator"]:
+                    if child.type in {"variable_declarator"}:
                         name_node = child.child_by_field_name("name")
                         if name_node:
                             name = code_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8")
@@ -156,7 +159,7 @@ class Analyzer:
                             if value_node:
                                 code = code_bytes[value_node.start_byte : value_node.end_byte].decode("utf-8")
                                 # Only chunk objects, functions, and arrays that are significant
-                                if value_node.type in ["object", "array", "arrow_function", "function", "class"]:
+                                if value_node.type in {"object", "array", "arrow_function", "function", "class"}:
                                     called_symbols = self.find_called_symbols(code, language, {})
                                     chunk = CodeChunk(
                                         type="variable",
@@ -177,7 +180,7 @@ class Analyzer:
                                     chunks.append(chunk)
 
             # Handle import statements
-            elif node.type in ["import_statement", "import_declaration"]:
+            elif node.type in {"import_statement", "import_declaration"}:
                 code = code_bytes[node.start_byte : node.end_byte].decode("utf-8")
                 chunk = CodeChunk(
                     type="import",
@@ -237,7 +240,7 @@ class Analyzer:
                     # Only chunk meaningful containers
                     if tag in {"div", "section", "article", "template", "main"}:
                         code = code_bytes[n.start_byte : n.end_byte].decode("utf8")
-                        if len(code.strip()) > 50:  # avoid tiny tags
+                        if len(code.strip()) > TINY_TAGS:  # avoid tiny tags
                             called_symbols = self.find_called_symbols(code, language, {})
                             chunk = CodeChunk(
                                 type="html_element",
@@ -293,16 +296,12 @@ class Analyzer:
             if n.type in {"rule_set", "at_rule", "keyframes_statement"}:
                 code = code_bytes[n.start_byte : n.end_byte].decode("utf8")
                 # Extract selector as name
-                # selector_node = n.child_by_field_name("selectors")
                 selector_node = ""
                 for child in n.children:
-                    if child.type == "selectors":
-                        selector_node = child
-                    elif child.type == "at_keyword":
+                    if child.type in {"selectors", "at_keyword"}:
                         selector_node = child
                 name = "unknown_selector"
                 if selector_node:
-                    # print("here", end="*")
                     name = code_bytes[selector_node.start_byte : selector_node.end_byte].decode("utf8").strip()
                 called_symbols = self.find_called_symbols(code, language, {})
 
@@ -357,7 +356,7 @@ class Analyzer:
             )
         ]
 
-    def parse_python_file_libcst(self, file_path: Path, symbol_index: dict) -> list[CodeChunk]:
+    def parse_python_file_libcst(self, file_path: Path, symbol_index: dict) -> list[CodeChunk]:  # noqa: C901
         """Parse Python file using libCST for better accuracy"""
         if file_path.suffix != ".py":
             return []
@@ -371,7 +370,6 @@ class Analyzer:
 
             wrapper = cst.MetadataWrapper(cst.parse_module(code))
             module = wrapper.module
-            # print(module)
 
         except Exception as e:
             console.print(f"[yellow]LibCST parse error for {file_path}: {e}[/yellow]")
@@ -396,7 +394,7 @@ class Analyzer:
                         module_name = code_for_node(alias.name)
                     self.imports[local_name] = module_name
                     # Check for Django models import
-                    if module_name in ["django.db.models", "django.core.models"]:
+                    if module_name in {"django.db.models", "django.core.models"}:
                         self.django_model_imports[local_name] = module_name
 
             def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
@@ -420,7 +418,7 @@ class Analyzer:
                         # Check for Django-specific imports
                         imported_name = alias.name.value
                         if (
-                            module_name in ["django.db", "django.db.models", "django.core.models"]
+                            module_name in {"django.db", "django.db.models", "django.core.models"}
                             and imported_name == "models"
                         ):
                             self.django_model_imports[local_name] = f"{module_name}.{imported_name}"
@@ -444,7 +442,6 @@ class Analyzer:
         wrapper.visit(import_visitor)
 
         relative_path = str(file_path.relative_to(settings.project_path))  # Go up to project root
-        # chunks = []
 
         class FunctionVisitor(cst.CSTVisitor):
             METADATA_DEPENDENCIES = (PositionProvider,)
@@ -473,7 +470,7 @@ class Analyzer:
                 self.current_class_decorators = []  # Track decorators for the current class
                 self.current_class_type = None  # Track the current class type
 
-            def visit_ClassDef(self, node: cst.ClassDef):
+            def visit_ClassDef(self, node: cst.ClassDef):  # noqa: C901, N802, PLR0912, PLR0915
                 class_name = node.name.value
                 if self.current_class is None:
                     # This is a top-level class
@@ -500,7 +497,7 @@ class Analyzer:
                         self._process_django_meta_class(node, class_name)
                 elif any(
                     base_class in self.django_model_imports
-                    or any(django_import in base_class for django_import in self.django_model_imports.keys())
+                    or any(django_import in base_class for django_import in self.django_model_imports)
                     for base_class in [
                         code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
                         for base in node.bases or []
@@ -534,7 +531,7 @@ class Analyzer:
                 elif any(
                     "admin" in base_class.lower()
                     or "Admin" in base_class
-                    or base_class in ["admin.ModelAdmin", "admin.StackedInline", "admin.TabularInline"]
+                    or base_class in {"admin.ModelAdmin", "admin.StackedInline", "admin.TabularInline"}
                     for base_class in [
                         code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
                         for base in node.bases or []
@@ -612,23 +609,23 @@ class Analyzer:
                     # Process model fields in the class body
                     self._process_django_model_fields(node)
 
-            def _process_django_model_fields(self, node: cst.ClassDef):
+            def _process_django_model_fields(self, node: cst.ClassDef):  # noqa: C901
                 """Process Django model fields in the class definition"""
                 if not node.body:
                     return
 
                 model_fields = []
-                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:  # noqa: PLR1702
                     if isinstance(stmt, cst.SimpleStatementLine):
                         for expr in stmt.body:
                             if isinstance(expr, cst.Assign):
                                 for target in expr.targets:
                                     if isinstance(target.target, cst.Name):
                                         field_name = target.target.value
-                                        # Check if the assignment is a field definition like CharField, IntegerField, etc.
+                                        # Check if the assignment is a field definition like CharField, IntegerField, etc.  # noqa: E501
                                         if isinstance(expr.value, cst.Call) and isinstance(expr.value.func, cst.Name):
                                             field_type = expr.value.func.value
-                                            if field_type in [
+                                            if field_type in {
                                                 "CharField",
                                                 "IntegerField",
                                                 "TextField",
@@ -640,7 +637,7 @@ class Analyzer:
                                                 "DateField",
                                                 "BooleanField",
                                                 "FloatField",
-                                            ]:
+                                            }:
                                                 # This is a Django model field
                                                 model_fields.append({
                                                     "name": field_name,
@@ -655,7 +652,7 @@ class Analyzer:
                                         ):
                                             base_name = expr.value.func.value.value
                                             field_type = expr.value.func.attr.value
-                                            if base_name in self.django_model_imports and field_type in [
+                                            if base_name in self.django_model_imports and field_type in {
                                                 "CharField",
                                                 "IntegerField",
                                                 "TextField",
@@ -667,7 +664,7 @@ class Analyzer:
                                                 "DateField",
                                                 "BooleanField",
                                                 "FloatField",
-                                            ]:
+                                            }:
                                                 # This is a Django model field using models.CharField format
                                                 model_fields.append({
                                                     "name": field_name,
@@ -693,14 +690,14 @@ class Analyzer:
                                 for target in expr.targets:
                                     if isinstance(target.target, cst.Name):
                                         attr_name = target.target.value
-                                        if attr_name in [
+                                        if attr_name in {
                                             "list_display",
                                             "list_filter",
                                             "search_fields",
                                             "readonly_fields",
                                             "exclude",
                                             "fields",
-                                        ]:
+                                        }:
                                             try:
                                                 attr_value = module.code_for_node(expr.value)
                                                 admin_attrs[attr_name] = attr_value
@@ -728,7 +725,7 @@ class Analyzer:
                                         if isinstance(expr.value, cst.Call):
                                             if isinstance(expr.value.func, cst.Name):
                                                 field_type = expr.value.func.value
-                                                if field_type in [
+                                                if field_type in {
                                                     "CharField",
                                                     "IntegerField",
                                                     "TextField",
@@ -736,7 +733,7 @@ class Analyzer:
                                                     "ChoiceField",
                                                     "ModelChoiceField",
                                                     "ModelMultipleChoiceField",
-                                                ]:
+                                                }:
                                                     # This is a Django form field
                                                     form_fields.append({
                                                         "name": field_name,
@@ -748,7 +745,7 @@ class Analyzer:
                                             ):
                                                 base_name = expr.value.func.value.value
                                                 field_type = expr.value.func.attr.value
-                                                if base_name in ["forms", "django.forms"] and field_type in [
+                                                if base_name in {"forms", "django.forms"} and field_type in {
                                                     "CharField",
                                                     "IntegerField",
                                                     "TextField",
@@ -756,7 +753,7 @@ class Analyzer:
                                                     "ChoiceField",
                                                     "ModelChoiceField",
                                                     "ModelMultipleChoiceField",
-                                                ]:
+                                                }:
                                                     # This is a Django form field using forms.CharField format
                                                     form_fields.append({
                                                         "name": field_name,
@@ -779,7 +776,7 @@ class Analyzer:
                     if isinstance(stmt, cst.FunctionDef):
                         method_name = stmt.name.value
                         # Check if this is a standard HTTP method or Django-specific method
-                        if method_name in [
+                        if method_name in {
                             "get",
                             "post",
                             "put",
@@ -788,7 +785,7 @@ class Analyzer:
                             "setup",
                             "get_context_data",
                             "get_queryset",
-                        ]:
+                        }:
                             decorators = []
                             if hasattr(stmt, "decorators") and stmt.decorators:
                                 for deco in stmt.decorators:
@@ -926,17 +923,17 @@ class Analyzer:
                     start_line=start_line,
                     end_line=end_line,
                     docstring=self._get_docstring(original_node),
-                    dependencies=sorted(list(set(dependencies))),
+                    dependencies=sorted(set(dependencies)),
                     signature=signature,
                     complexity=self.analyzer._calculate_complexity(code_block, language="python"),
                     parent=self.current_class,
                     defines=[original_node.name.value],
-                    references=sorted(list(set(all_references))),
+                    references=sorted(set(all_references)),
                 )
 
                 # Enhance relationships metadata
                 chunk.relationships.update({
-                    "imports_used": sorted(list(self.current_function_imports)),
+                    "imports_used": sorted(self.current_function_imports),
                     "class_inheritance": [] if not self.current_class else self.current_class_inheritance,
                     "django_model_fields": []
                     if not self.current_class
@@ -966,7 +963,7 @@ class Analyzer:
                 # Add Django-specific dependencies if this is a model class
                 if self.current_class_inheritance:
                     for inheritance in self.current_class_inheritance:
-                        if any(django_import in inheritance for django_import in self.django_model_imports.keys()):
+                        if any(django_import in inheritance for django_import in self.django_model_imports):
                             dependencies.append("django.db.models")
 
                 # Build class signature
@@ -980,13 +977,13 @@ class Analyzer:
                         if "models" in inheritance.lower():
                             class_type = "django_model"
                             break
-                        elif "admin" in inheritance.lower():
+                        if "admin" in inheritance.lower():
                             class_type = "django_admin"
                             break
-                        elif "Form" in inheritance or "form" in inheritance.lower():
+                        if "Form" in inheritance or "form" in inheritance.lower():
                             class_type = "django_form"
                             break
-                        elif "View" in inheritance or "view" in inheritance.lower():
+                        if "View" in inheritance or "view" in inheritance.lower():
                             class_type = "django_view"
                             break
 
@@ -1000,12 +997,12 @@ class Analyzer:
                     start_line=start_line,
                     end_line=end_line,
                     docstring=self._get_docstring(original_node),
-                    dependencies=sorted(list(set(dependencies))),
+                    dependencies=sorted(set(dependencies)),
                     signature=signature,
-                    complexity=self.analyzer._calculate_complexity(code_block, language="python"),
+                    complexity=self.analyzer._calculate_complexity(code_block, language="python"),  # noqa: SLF001
                     parent=None,  # Set parent if class is nested
                     defines=[original_node.name.value],
-                    references=sorted(list(set(all_references))),
+                    references=sorted(set(all_references)),
                 )
 
                 # Extract decorators from the original node
@@ -1046,13 +1043,13 @@ class Analyzer:
 
                 # Enhance relationships metadata
                 chunk.relationships.update({
-                    "imports_used": sorted(list(self.current_class_imports)),
+                    "imports": sorted(self.current_class_imports),
                     "class_inheritance": self.current_class_inheritance,
                     "django_model_fields": self.django_model_relationships.get(self.current_class, []),
                     "django_model_inheritance": [
                         base
                         for base in self.current_class_inheritance
-                        if any(django_import in base for django_import in self.django_model_imports.keys())
+                        if any(django_import in base for django_import in self.django_model_imports)
                     ],
                     "django_model_managers": self.django_model_managers.get(self.current_class, []),
                     "django_meta_class": self.django_meta_classes.get(self.current_class, {}),
@@ -1087,19 +1084,19 @@ class Analyzer:
                     if self.current_class and name in self.django_model_imports:
                         # This might be something like models.CharField
                         field_type = code_for_node(node.attr)
-                        if field_type in [
+                        if field_type in {
                             "CharField",
                             "IntegerField",
                             "ForeignKey",
                             "ManyToManyField",
                             "OneToOneField",
-                        ]:
+                        }:
                             # Track Django model fields if we're in a class definition
                             if self.current_class not in self.django_model_relationships:
                                 self.django_model_relationships[self.current_class] = []
                             self.django_model_relationships[self.current_class].append((name, field_type))
                         # Track Django model managers
-                        elif field_type in ["Manager", "RelatedManager"]:
+                        elif field_type in {"Manager", "RelatedManager"}:
                             if self.current_class not in self.django_model_managers:
                                 self.django_model_managers[self.current_class] = []
                             self.django_model_managers[self.current_class].append((name, field_type))
@@ -1291,24 +1288,17 @@ class Analyzer:
                     # Check if param is a sentinel value
                     if isinstance(param, cst.Param):
                         # Get parameter name - it could be a string directly or a Name node
-                        if isinstance(param.name, str):
-                            param_str = param.name
-                        else:
-                            param_str = param.name.value
+                        param_str = param.name if isinstance(param.name, str) else param.name.value
 
                         # Add type annotation if present
                         if param.annotation and not isinstance(param.annotation, cst.MaybeSentinel):
-                            try:
+                            with contextlib.suppress(builtins.BaseException):
                                 param_str += f": {module.code_for_node(param.annotation)}"
-                            except:
-                                pass
 
                         # Add default value if present
                         if param.default:
-                            try:
+                            with contextlib.suppress(builtins.BaseException):
                                 param_str += f" = {module.code_for_node(param.default)}"
-                            except:
-                                pass
 
                         param_strings.append(param_str)
 
@@ -1316,40 +1306,28 @@ class Analyzer:
                 if params.star_arg and not isinstance(params.star_arg, cst.MaybeSentinel):
                     star_arg = params.star_arg
                     # Handle star_arg name
-                    if isinstance(star_arg.name, str):
-                        star_str = f"*{star_arg.name}"
-                    else:
-                        star_str = f"*{star_arg.name.value}"
+                    star_str = f"*{star_arg.name}" if isinstance(star_arg.name, str) else f"*{star_arg.name.value}"
 
                     if star_arg.annotation and not isinstance(star_arg.annotation, cst.MaybeSentinel):
-                        try:
+                        with contextlib.suppress(builtins.BaseException):
                             star_str += f": {module.code_for_node(star_arg.annotation)}"
-                        except:
-                            pass
                     param_strings.append(star_str)
 
                 # Handle keyword-only parameters
                 for param in params.kwonly_params:
                     if isinstance(param, cst.Param):
                         # Get parameter name
-                        if isinstance(param.name, str):
-                            param_str = param.name
-                        else:
-                            param_str = param.name.value
+                        param_str = param.name if isinstance(param.name, str) else param.name.value
 
                         # Add type annotation if present
                         if param.annotation and not isinstance(param.annotation, cst.MaybeSentinel):
-                            try:
+                            with contextlib.suppress(builtins.BaseException):
                                 param_str += f": {module.code_for_node(param.annotation)}"
-                            except:
-                                pass
 
                         # Add default value if present
                         if param.default:
-                            try:
+                            with contextlib.suppress(builtins.BaseException):
                                 param_str += f" = {module.code_for_node(param.default)}"
-                            except:
-                                pass
 
                         param_strings.append(param_str)
 
@@ -1363,10 +1341,8 @@ class Analyzer:
                         star_str = f"**{star_kwarg.name.value}"
 
                     if star_kwarg.annotation and not isinstance(star_kwarg.annotation, cst.MaybeSentinel):
-                        try:
+                        with contextlib.suppress(builtins.BaseException):
                             star_str += f": {module.code_for_node(star_kwarg.annotation)}"
-                        except:
-                            pass
                     param_strings.append(star_str)
 
                 return f"({', '.join(param_strings)})"
@@ -1389,10 +1365,7 @@ class Analyzer:
                             continue
 
                 # Build the signature string
-                if base_classes:
-                    bases_str = f"({', '.join(base_classes)})"
-                else:
-                    bases_str = "()"
+                bases_str = f"({', '.join(base_classes)})" if base_classes else "()"
 
                 return f"class {name}{bases_str}:"
 
@@ -1425,7 +1398,7 @@ class Analyzer:
                 if name in symbol_index and name not in {"self", "cls", "super"}:
                     references.add(name)
 
-        elif language in ("javascript", "typescript"):
+        elif language in {"javascript", "typescript"}:
             import re
 
             words = re.findall(r"\b([A-Za-z_]\w*)\s*\(", code)
@@ -1469,7 +1442,7 @@ class Analyzer:
 
             for keyword in complexity_keywords:
                 # Count occurrences, adjusting for common patterns
-                if keyword in ["if", "for", "while"]:
+                if keyword in {"if", "for", "while"}:
                     # Special handling to avoid double counting in "else if"
                     if keyword == "if":
                         count = code.count("if ") + code.count("if(") - code.count("else if")
@@ -1492,8 +1465,8 @@ class Analyzer:
 
         if language == "python":
             # Parse imports
-            for line in code.split("\n"):
-                line = line.strip()
+            for fline in code.split("\n"):
+                line = fline.strip()
                 if line.startswith("import "):
                     # import A, B as C → extract A, B
                     parts = line[7:].split(",")
@@ -1516,15 +1489,15 @@ class Analyzer:
                 if sym not in common and not sym.startswith("_"):
                     deps.add(sym)
 
-        elif language in ["javascript", "typescript"]:
+        elif language in {"javascript", "typescript"}:
             # Handle import X from 'Y' and require('Y')
             import_re = re.compile(r'import\s+(?:[\w{}\*\s,]+\s+from\s+)?[\'"]([^\'"]+)[\'"]')
             require_re = re.compile(r'require\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)')
 
-            for line in code.split("\n"):
-                line = line.strip()
+            for fline in code.split("\n"):
+                line = fline.strip()
                 # Skip comments
-                if line.startswith("//") or line.startswith("/*"):
+                if line.startswith(("//", "/*")):
                     continue
                 for match in import_re.findall(line):
                     deps.add(match.split("/")[0])  # e.g., 'lodash/map' → 'lodash'
@@ -1537,43 +1510,46 @@ class Analyzer:
     # ENHANCED METADATA EXTRACTION METHODS (Migrated from enhanced.py)
     # ============================================================================
 
-    def add_code_metadata(self, chunk: CodeChunk, node=None, code_bytes: bytes = None) -> None:
+    def add_code_metadata(self, chunk: CodeChunk, node=None, code_bytes: bytes | None = None) -> None:
         """Extract code-specific metadata (from enhanced.py)"""
         metadata = {}
 
         if chunk.language == "python":
-            metadata["decorators"] = self._extract_decorators(node, code_bytes) if node else []
-            metadata["base_classes"] = self._extract_base_classes(node, code_bytes) if node else []
+            if chunk.metadata.get("decorators") is None:
+                metadata["decorators"] = self._extract_decorators(node, code_bytes) if node else []
+            if chunk.metadata.get("base_classes") is None:
+                metadata["base_classes"] = self._extract_base_classes(node, code_bytes) if node else []
             metadata["access_modifier"] = self._determine_access_modifier(chunk.code)
             metadata["is_abstract"] = self._is_abstract(chunk.code)
             metadata["is_final"] = self._is_final(chunk.code)
 
-        elif chunk.language in ["javascript", "typescript"]:
+        elif chunk.language in {"javascript", "typescript"}:
             metadata["export_type"] = self._extract_export_type(chunk.code)
             metadata["is_async"] = "async" in chunk.code
 
         chunk.metadata.update(metadata)
 
     def _extract_decorators(self, node, code_bytes: bytes) -> list[str]:
-        """Extract decorators from Python AST or CST nodes (from enhanced.py)"""
+        """Extract decorators from Python CST nodes (from enhanced.py)"""
         decorators = []
 
-        if hasattr(node, "decorators") and node.decorators:
-            for deco in node.decorators:
-                try:
-                    # Access the decorator using proper libCST methods
-                    decorator_code = deco.decorator
-                    decorator_str = decorator_code.value if hasattr(decorator_code, "value") else str(decorator_code)
-                    decorators.append(decorator_str)
-                except Exception:
-                    try:
-                        # Fallback to using module.code_for_node if available
-                        decorator_str = module.code_for_node(deco.decorator)
-                        decorators.append(decorator_str)
-                    except:
-                        continue
+        if not node or not hasattr(node, "decorators") or not node.decorators:
             return decorators
 
+        # This function assumes 'node' is a LibCST node, consistent with
+        # the parsing strategy used in `parse_python_file_libcst`.
+        for deco in node.decorators:
+            try:
+                # `deco` is a `cst.Decorator` node. The actual expression
+                # that represents the decorator is in `deco.decorator`.
+                # We use an empty Module to call code_for_node, which works for
+                # self-contained nodes like decorators.
+                decorator_str = cst.Module([]).code_for_node(deco.decorator).strip()
+                decorators.append(decorator_str)
+            except Exception:
+                # If code_for_node fails, we skip this decorator.
+                # This is more robust than the previous implementation.
+                continue
         return decorators
 
     def _extract_base_classes(self, node, code_bytes: bytes) -> list[str]:
@@ -1592,7 +1568,7 @@ class Analyzer:
             for child in node.children:
                 if hasattr(child, "type") and child.type == "argument_list":
                     for arg in child.children:
-                        if arg.type not in ["(", ")"]:
+                        if arg.type not in {"(", ")"}:
                             try:
                                 base_classes.append(code_bytes[arg.start_byte : arg.end_byte].decode("utf-8").strip())
                             except Exception:
@@ -1663,17 +1639,26 @@ class Analyzer:
         clean_code = re.sub(r"\s+", " ", clean_code).strip()
         return hashlib.md5(clean_code.encode()).hexdigest()[:10]
 
-    def add_relationship_metadata(self, chunk: CodeChunk, all_chunks: list[CodeChunk] = None) -> None:
+    def add_relationship_metadata(self, chunk: CodeChunk, all_chunks: list[CodeChunk] | None = None) -> None:
         """Add comprehensive relationship metadata (from enhanced.py)"""
-        chunk.relationships = {
-            "imports": self._extract_imports(chunk.code, chunk.language),
-            "dependencies": chunk.dependencies or [],
-            "parent": chunk.parent,
-            "children": self._find_child_chunks(chunk, all_chunks or []),
-            "references": chunk.references or [],
-            "called_functions": self._extract_called_functions(chunk.code, chunk.language),
-            "defined_symbols": chunk.defines or [],
-        }
+
+        relationships = {}
+        if chunk.relationships.get("imports") is None:
+            relationships["imports"] = self._extract_imports(chunk.code, chunk.language)
+        if chunk.relationships.get("dependencies") is None:
+            relationships["dependencies"] = chunk.dependencies or []
+        if chunk.relationships.get("parent") is None:
+            relationships["parent"] = chunk.parent
+        if chunk.relationships.get("children") is None:
+            relationships["children"] = self._find_child_chunks(chunk, all_chunks or [])
+        if chunk.relationships.get("references") is None:
+            relationships["references"] = chunk.references or []
+        if chunk.relationships.get("called_functions") is None:
+            relationships["called_functions"] = self._extract_called_functions(chunk.code, chunk.language)
+        if chunk.relationships.get("defined_symbols") is None:
+            relationships["defined_symbols"] = chunk.defines or []
+
+        chunk.relationships.update(relationships)
 
     def _extract_imports(self, code: str, language: str) -> list[str]:
         """Extract import statements (from enhanced.py)"""
@@ -1681,13 +1666,13 @@ class Analyzer:
         lines = code.split("\n")
 
         if language == "python":
-            for line in lines:
-                line = line.strip()
+            for fline in lines:
+                line = fline.strip()
                 if line.startswith(("import ", "from ")):
                     imports.append(line)
-        elif language in ["javascript", "typescript"]:
-            for line in lines:
-                line = line.strip()
+        elif language in {"javascript", "typescript"}:
+            for fline in lines:
+                line = fline.strip()
                 if line.startswith(("import ", "export ", "require(")):
                     imports.append(line)
 
@@ -1709,16 +1694,16 @@ class Analyzer:
         """Find IDs of child chunks (from enhanced.py)"""
         children = []
         if chunk.type == "class":
-            for c in all_chunks:
-                if getattr(c, "parent", None) == chunk.name and c.file_path == chunk.file_path:
-                    children.append(c.id)
+            children.extend(
+                c.id for c in all_chunks if getattr(c, "parent", None) == chunk.name and c.file_path == chunk.file_path
+            )
         return children
 
-    def add_context_metadata(self, chunk: CodeChunk, file_path: Path, project_path: Path = None) -> None:
+    def add_context_metadata(self, chunk: CodeChunk, file_path: Path, project_path: Path | None = None) -> None:
         """Add contextual information (from enhanced.py)"""
         chunk.context = {
             "module_context": self._get_module_context(file_path),
-            "project_context": self._get_project_context(project_path),
+            "project_context": self._get_project_context(file_path),
             "file_hierarchy": self._get_file_hierarchy(file_path),
             "domain_context": self._infer_domain_context(chunk, file_path),
         }
@@ -1730,13 +1715,22 @@ class Analyzer:
             return f"{parent_dir} module"
         return "root module"
 
-    def _get_project_context(self, project_path: Path = None) -> str:
+    def _get_project_context(self, project_path: Path = None) -> str:  # noqa: RUF013
         """Infer project context from structure (from enhanced.py)"""
+        pcontext = list(project_path.relative_to(settings.project_path).parts)
+        if "migrations" in pcontext:
+            return "Database changes"
+        if pcontext[-1].endswith(".py"):
+            return f"{pcontext[0]} Backend App"
+        if pcontext[-1].endswith(".html") or pcontext[-1].endswith(".css"):
+            return "Project Templates"
+        if pcontext[-1].endswith(".js") or pcontext[-1].endswith(".mjs"):
+            return "Tipsy Javascript Frontend"
         return "Project codebase"
 
     def _get_file_hierarchy(self, file_path: Path) -> list[str]:
-        """Get file hierarchy as list (from enhanced.py)"""
-        return list(file_path.parts)
+        """Get file hierarchy as list, relative to the project root."""
+        return list(file_path.relative_to(settings.project_path).parts)
 
     def _infer_domain_context(self, chunk: CodeChunk, file_path: Path) -> str:
         """Infer domain context from file path and content (from enhanced.py)"""
@@ -1759,10 +1753,10 @@ class Analyzer:
         self,
         chunk: CodeChunk,
         node=None,
-        code_bytes: bytes = None,
-        file_path: Path = None,
-        project_path: Path = None,
-        all_chunks: list[CodeChunk] = None,
+        code_bytes: bytes | None = None,
+        file_path: Path | None = None,
+        project_path: Path | None = None,
+        all_chunks: list[CodeChunk] | None = None,
     ) -> None:
         """Full enhancement pipeline for a chunk (from enhanced.py)"""
         self.add_code_metadata(chunk, node, code_bytes)
