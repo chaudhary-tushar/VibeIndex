@@ -2,6 +2,9 @@ import pytest
 
 from src.preprocessing.dependency_mapper import DependencyMapper
 
+# Constants for test magic values
+MAX_DEPS = 10
+
 
 @pytest.fixture
 def dependency_mapper():
@@ -40,11 +43,11 @@ import pandas as pd
 
     # The function also extracts symbols, so we expect some of 'MyClass', 'List', 'Dict', 'Path' as symbols too
     # (limited to 10 total results, so not all might be present)
-    symbol_found = any([symbol in deps for symbol in ["MyClass", "List", "Dict", "Path"]])
+    symbol_found = any(symbol in deps for symbol in ["MyClass", "List", "Dict", "Path"])
     assert symbol_found
 
     # Limit should be applied (max 10)
-    assert len(deps) <= 10
+    assert len(deps) <= MAX_DEPS
 
 
 def test_extract_dependencies_python_symbol_usage(dependency_mapper):
@@ -83,10 +86,7 @@ class MyClass:
 """
 
     # Define a symbol index with some project symbols
-    symbol_index = {
-        "HelperFunction": "path/to/file",
-        "MyClass": "path/to/file"
-    }
+    symbol_index = {"HelperFunction": "path/to/file", "MyClass": "path/to/file"}
 
     deps = dependency_mapper.extract_dependencies(code, "python", symbol_index)
 
@@ -137,10 +137,7 @@ function myFunc() {
 const instance = new myFunc();
 """
 
-    symbol_index = {
-        "MyClass": "path/to/file",
-        "MyOtherClass": "path/to/file"
-    }
+    symbol_index = {"MyClass": "path/to/file", "MyOtherClass": "path/to/file"}
 
     deps = dependency_mapper.extract_dependencies(code, "javascript", symbol_index)
 
@@ -171,7 +168,7 @@ def test_extract_dependencies_html(dependency_mapper):
     # HTML dependencies may be limited, but we should at least see some resource references
     # This will depend on the implementation of _extract_html_dependencies
     # which is not fully shown in the source code, so we'll test basic functionality
-    deps = dependency_mapper._extract_html_dependencies(code)
+    deps = dependency_mapper._extract_html_dependencies(code)  # noqa: SLF001
     # Just verify the method exists and doesn't error
     assert isinstance(deps, (list, set))
 
@@ -197,7 +194,7 @@ def test_extract_dependencies_css(dependency_mapper):
     # CSS dependencies may be limited, but check basic functionality
     # This will depend on the implementation of _extract_css_dependencies
     # which is not fully shown in the source code
-    deps = dependency_mapper._extract_css_dependencies(code)
+    deps = dependency_mapper._extract_css_dependencies(code)  # noqa: SLF001
     # Just verify the method exists and doesn't error
     assert isinstance(deps, (list, set))
 
@@ -215,7 +212,7 @@ def test_extract_dependencies_unknown_language(dependency_mapper):
 def test_extract_python_imports_basic(dependency_mapper):
     """Test basic Python import extraction"""
     code = "import os"
-    deps = dependency_mapper._extract_python_imports(code)
+    deps = dependency_mapper._extract_python_imports(code)  # noqa: SLF001
     assert "os" in deps
 
 
@@ -228,7 +225,7 @@ from mypackage.sub import ClassA, ClassB
 import mypackage.utils as utils
 """
 
-    deps = dependency_mapper._extract_python_imports(code)
+    deps = dependency_mapper._extract_python_imports(code)  # noqa: SLF001
 
     assert "os" in deps
     assert "sys" in deps
@@ -241,7 +238,7 @@ def test_extract_python_symbol_usage_basic(dependency_mapper):
     """Test basic Python symbol usage extraction"""
     code = "class MyClass: pass\nobj = MyClass()"
 
-    deps = dependency_mapper._extract_python_symbol_usage(code, None)
+    deps = dependency_mapper._extract_python_symbol_usage(code, None)  # noqa: SLF001
 
     assert "MyClass" in deps
 
@@ -259,7 +256,7 @@ result = func_a()
 """
 
     symbol_index = {"ClassB": "path/to/file", "func_a": "path/to/file"}
-    deps = dependency_mapper._extract_python_symbol_usage(code, symbol_index)
+    deps = dependency_mapper._extract_python_symbol_usage(code, symbol_index)  # noqa: SLF001
 
     assert "ClassB" in deps
     # func_a is in index but also defined in this code, behavior depends on implementation
@@ -276,7 +273,7 @@ error = ValueError  # ValueError is a builtin
 x = str(5)  # str is a builtin
 """
 
-    deps = dependency_mapper._extract_python_symbol_usage(code, None)
+    deps = dependency_mapper._extract_python_symbol_usage(code, None)  # noqa: SLF001
 
     # Built-ins should be filtered out
     assert "None" not in deps

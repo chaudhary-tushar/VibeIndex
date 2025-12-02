@@ -14,6 +14,7 @@ from rich.markdown import Markdown
 
 from src.config import EmbeddingConfig
 from src.config import QdrantConfig
+from src.config import settings
 from src.embedding.embedder import EmbeddingGenerator
 from src.generation import BatchProcessor_2
 from src.generation.context_builder import ContextEnricher
@@ -23,7 +24,7 @@ from src.generation.context_builder import stats_check
 # Import our preprocessing modules
 from src.preprocessing import parse_file
 from src.preprocessing import parse_project
-from src.preprocessing.chunk import ChunkPreprocessor
+from src.preprocessing.preprocessor import ChunkPreprocessor
 from src.retrieval import CodeRAG_2
 from src.retrieval.hybrid_search import setup_hybrid_collection
 from src.retrieval.search import QdrantIndexer
@@ -391,12 +392,12 @@ def cli():
 
 @cli.command()
 @click.option("--path", "-p", default=".", help="Project path to ingest")
-@click.option("--output", "-o", help="Output file for parsed chunks (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def ingest(path, output, verbose):
+def ingest(path, verbose):
     """
     Run the data ingestion pipeline - parse code into chunks.
     """
+    settings.project_path = Path(path).resolve()
     click.echo(f"Running code parsing pipeline for: {path}")
 
     try:
@@ -406,18 +407,6 @@ def ingest(path, output, verbose):
         if verbose:
             click.echo(f"Found {len(parser.chunks)} code chunks")
             click.echo(f"Statistics: {dict(parser.stats)}")
-
-        # Save results if output specified
-        if output:
-            parser.save_results(output)
-            click.echo(f"Results saved to: {output}")
-        else:
-            # Show summary
-            click.echo("\nParsed chunks summary:")
-            for i, chunk in enumerate(parser.chunks[:10]):  # Show first 10
-                click.echo(f"  {i + 1}. {chunk.name} ({chunk.type}) - {chunk.file_path}")
-            if len(parser.chunks) > 10:
-                click.echo(f"  ... and {len(parser.chunks) - 10} more")
 
         click.echo("\n✅ Code parsing complete!")
 

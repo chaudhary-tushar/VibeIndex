@@ -7,6 +7,20 @@ from qdrant_client.models import Distance
 from src.config.embedding_config import EmbeddingConfig
 from src.config.qdrant_config import QdrantConfig
 
+# Constants for test magic values
+DEFAULT_EMBEDDING_DIM = 768
+DEFAULT_BATCH_SIZE = 32
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_TIMEOUT = 30
+CUSTOM_EMBEDDING_DIM = 1024
+CUSTOM_BATCH_SIZE = 64
+CUSTOM_MAX_RETRIES = 5
+CUSTOM_TIMEOUT = 60
+DEFAULT_QDRANT_PORT = 6333
+CUSTOM_QDRANT_PORT = 6334
+DEFAULT_QDRANT_BATCH_SIZE = 100
+CUSTOM_QDRANT_BATCH_SIZE = 50
+
 # --- Tests for EmbeddingConfig ---
 
 
@@ -14,10 +28,10 @@ def test_embedding_config_defaults():
     config = EmbeddingConfig(_env_file=None)
     assert config.model_url == "http://localhost:12434/engines/llama.cpp/v1"
     assert config.model_name == "ai/embeddinggemma"
-    assert config.embedding_dim == 768
-    assert config.batch_size == 32
-    assert config.max_retries == 3
-    assert config.timeout == 30
+    assert config.embedding_dim == DEFAULT_EMBEDDING_DIM
+    assert config.batch_size == DEFAULT_BATCH_SIZE
+    assert config.max_retries == DEFAULT_MAX_RETRIES
+    assert config.timeout == DEFAULT_TIMEOUT
     assert config.embedding_model_name == "ai/embeddinggemma"
 
 
@@ -32,10 +46,10 @@ def test_embedding_config_env_vars(monkeypatch):
     config = EmbeddingConfig(_env_file=None)
     assert config.model_url == "http://custom-host:8000"
     assert config.model_name == "custom-model"
-    assert config.embedding_dim == 1024
-    assert config.batch_size == 64
-    assert config.max_retries == 5
-    assert config.timeout == 60
+    assert config.embedding_dim == CUSTOM_EMBEDDING_DIM
+    assert config.batch_size == CUSTOM_BATCH_SIZE
+    assert config.max_retries == CUSTOM_MAX_RETRIES
+    assert config.timeout == CUSTOM_TIMEOUT
     assert config.embedding_model_name == "custom-model"
 
 
@@ -76,13 +90,13 @@ def test_embedding_config_get_api_endpoint():
 def test_qdrant_config_defaults():
     config = QdrantConfig(_env_file=None)
     assert config.host == "localhost"
-    assert config.port == 6333
-    assert config.qdrant_api_key == ""
+    assert config.port == DEFAULT_QDRANT_PORT
+    assert not config.qdrant_api_key
     assert config.collection_prefix == "tipsy"
     assert config.distance_metric == Distance.COSINE
     assert config.enable_sparse_vectors is True
     assert config.enable_payload_index is True
-    assert config.batch_size == 100
+    assert config.batch_size == DEFAULT_QDRANT_BATCH_SIZE
     assert config.on_disk_vectors is False
     assert config.on_disk_sparse_vectors is False
 
@@ -101,13 +115,13 @@ def test_qdrant_config_env_vars(monkeypatch):
 
     config = QdrantConfig(_env_file=None)
     assert config.host == "qdrant.cloud"
-    assert config.port == 6334
+    assert config.port == CUSTOM_QDRANT_PORT
     assert config.qdrant_api_key == "test-api-key"
     assert config.collection_prefix == "my-app"
     assert config.distance_metric == Distance.EUCLID
     assert config.enable_sparse_vectors is False
     assert config.enable_payload_index is False
-    assert config.batch_size == 50
+    assert config.batch_size == CUSTOM_QDRANT_BATCH_SIZE
     assert config.on_disk_vectors is True
     assert config.on_disk_sparse_vectors is True
 

@@ -12,7 +12,7 @@ def test_codechunk_creation():
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     assert chunk.type == "function"
@@ -22,7 +22,8 @@ def test_codechunk_creation():
     assert chunk.language == "python"
     assert chunk.start_line == 1
     assert chunk.end_line == 1
-    assert chunk.id != ""  # ID should be auto-generated
+    assert chunk.id is not None  # ID should be auto-generated
+    assert bool(chunk.id)  # ID should be auto-generated
     assert chunk.qualified_name == "test.test_function"  # Generated from name and file stem
 
 
@@ -35,11 +36,11 @@ def test_codechunk_default_values():
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     # Check default values
-    assert chunk.id != ""
+    assert chunk.id
     assert chunk.qualified_name == "test.test_function"
     assert chunk.docstring is None
     assert chunk.signature is None
@@ -48,7 +49,6 @@ def test_codechunk_default_values():
     assert chunk.dependencies == []
     assert chunk.references == []
     assert chunk.defines == []
-    assert chunk.location == {}
     assert chunk.metadata == {}
     assert chunk.documentation == {}
     assert chunk.analysis == {}
@@ -68,7 +68,7 @@ def test_codechunk_dependencies_references_defines():
         end_line=2,
         dependencies=["os"],
         references=["os"],
-        defines=["test_function"]
+        defines=["test_function"],
     )
 
     assert chunk.dependencies == ["os"]
@@ -85,7 +85,7 @@ def test_codechunk_id_generation():
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     chunk2 = CodeChunk(
@@ -95,14 +95,15 @@ def test_codechunk_id_generation():
         file_path="test.py",
         language="python",
         start_line=5,
-        end_line=5
+        end_line=5,
     )
 
     # IDs should be different for different name/line combinations
     assert chunk1.id != chunk2.id
     # IDs should be 12 characters as per implementation
-    assert len(chunk1.id) == 12
-    assert len(chunk2.id) == 12
+    id_length_expected = 12
+    assert len(chunk1.id) == id_length_expected
+    assert len(chunk2.id) == id_length_expected
 
 
 def test_codechunk_qualified_name_generation():
@@ -115,7 +116,7 @@ def test_codechunk_qualified_name_generation():
         file_path="src/utils.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
     assert chunk1.qualified_name == "utils.my_function"
 
@@ -127,7 +128,7 @@ def test_codechunk_qualified_name_generation():
         file_path="src/models.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
     assert chunk2.qualified_name == "models.MyClass"
 
@@ -139,7 +140,7 @@ def test_codechunk_qualified_name_generation():
         file_path="src/config.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
     assert chunk3.qualified_name == "config"
 
@@ -155,7 +156,7 @@ def test_codechunk_to_dict():
         start_line=1,
         end_line=1,
         docstring="A test function",
-        complexity=3
+        complexity=3,
     )
 
     chunk_dict = chunk.to_dict()
@@ -168,7 +169,9 @@ def test_codechunk_to_dict():
     assert chunk_dict["start_line"] == 1
     assert chunk_dict["end_line"] == 1
     assert chunk_dict["docstring"] == "A test function"
-    assert chunk_dict["complexity"] == 3
+    complexity_test_value = 3
+    complexity_test_value = 3
+    assert chunk_dict["complexity"] == complexity_test_value
 
 
 def test_codechunk_metadata_structures():
@@ -180,11 +183,10 @@ def test_codechunk_metadata_structures():
         file_path="test.py",
         language="python",
         start_line=1,
-        end_line=1
+        end_line=1,
     )
 
     # All metadata structures should be initialized as empty dicts
-    assert isinstance(chunk.location, dict)
     assert isinstance(chunk.metadata, dict)
     assert isinstance(chunk.documentation, dict)
     assert isinstance(chunk.analysis, dict)
@@ -199,7 +201,6 @@ def test_codechunk_metadata_structures():
 
 def test_codechunk_with_custom_values():
     """Test CodeChunk with custom values for all fields"""
-    custom_location = {"start_line": 1, "end_line": 5, "start_col": 0, "end_col": 10}
     custom_metadata = {"decorator": "@app.route", "access_modifier": "public"}
     custom_documentation = {"docstring": "Custom docstring", "comments": ["comment1", "comment2"]}
     custom_analysis = {"complexity": 10, "tokens": 50}
@@ -223,24 +224,23 @@ def test_codechunk_with_custom_values():
         dependencies=["os"],
         references=["sys"],
         defines=["TestClass"],
-        location=custom_location,
         metadata=custom_metadata,
         documentation=custom_documentation,
         analysis=custom_analysis,
         relationships=custom_relationships,
-        context=custom_context
+        context=custom_context,
     )
 
     assert chunk.id == "custom-id"
     assert chunk.qualified_name == "test.TestClass"
     assert chunk.docstring == "Custom docstring"
     assert chunk.signature == "class TestClass:"
-    assert chunk.complexity == 10
+    complexity_value = 10
+    assert chunk.complexity == complexity_value
     assert chunk.parent == "ParentClass"
     assert chunk.dependencies == ["os"]
     assert chunk.references == ["sys"]
     assert chunk.defines == ["TestClass"]
-    assert chunk.location == custom_location
     assert chunk.metadata == custom_metadata
     assert chunk.documentation == custom_documentation
     assert chunk.analysis == custom_analysis

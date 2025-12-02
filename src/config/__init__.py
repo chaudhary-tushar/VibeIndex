@@ -11,5 +11,6 @@ Classes:
 
 from .embedding_config import EmbeddingConfig
 from .qdrant_config import QdrantConfig
+from .settings import settings
 
-__all__ = ["EmbeddingConfig", "QdrantConfig"]
+__all__ = ["EmbeddingConfig", "QdrantConfig", "settings"]

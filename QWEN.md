@@ -23,6 +23,8 @@ The project follows a modular design with the following main components:
 - Transformers (for embeddings)
 - Pydantic (for settings and data validation)
 - Click (for CLI commands)
+- Tree-sitter (for code parsing)
+- LangChain (for LLM integration)
 
 ## Project Structure
 
@@ -103,9 +105,19 @@ The application provides a CLI with two main commands:
 
 ### Development Commands
 
-- **Running tests**: `pytest`
-- **Formatting code**: (Not specified in current project, would need to add in pyproject.toml)
-- **Linting**: (Not specified in current project, would need to add in pyproject.toml)
+- **Running tests**: `pytest tests/`
+- **Formatting code**: `ruff format .`
+- **Linting**: `ruff check .`
+- **Additional CLI commands**:
+  - `ingest`: Parse code into chunks
+  - `preprocess`: Preprocess code chunks (deduplication, enhancement)
+  - `embed`: Generate embeddings for code chunks
+  - `index`: Index embedded chunks in Qdrant vector database
+  - `api`: Run the FastAPI server for code parsing
+  - `rag`: Interactive RAG query CLI
+  - `advanced_rag`: Advanced RAG with reranking
+  - `batch`: Batch process prompts through LLM
+  - `enrich`: Enrich code chunks with AI-generated context summaries
 
 ## Development Conventions
 
@@ -121,16 +133,19 @@ The application provides a CLI with two main commands:
 - Supports multiple file types: Python code, Markdown, PDF, CSV
 - Implements AST-based parsing for code files
 - Chunks content into meaningful segments for better retrieval
+- Uses Tree-sitter for parsing and libCST for Python-specific analysis
 
 ### Embedding Layer
 - Uses transformer models for generating vector embeddings
 - Designed to work with HuggingFace models
 - Creates dense vector representations of parsed content
+- Handles batch processing for efficiency
 
 ### Retrieval Layer
 - FastAPI-based REST API
 - Implements hybrid search capabilities
 - Exposes `/retrieve` endpoint for semantic search queries
+- Supports both keyword and vector similarity search
 
 ## Environment Variables
 
@@ -149,4 +164,23 @@ The application expects the following environment variables (defined in `config/
 3. **Retrieval**: Vector similarity search is performed against stored embeddings
 4. **Response**: Relevant results are returned to the user
 
-This project is currently in development with several TODOs marked in the code that need implementation.
+## Testing
+
+The project uses pytest for testing with a comprehensive test suite in the `tests/` directory:
+- Unit tests for individual components
+- Integration tests for pipeline components
+- Mock external services (Qdrant, LLMs)
+- Performance and accuracy tests
+
+Run all tests with:
+```bash
+pytest tests/
+```
+
+## Debug Files
+
+The project includes several `debug_*.py` files that are standalone scripts for manual testing and debugging specific functionality, rather than formal pytest tests. These include:
+- `debug_meta.py`: Tests the MetadataExtractor functionality
+- `debug_deps*.py`: Tests the DependencyMapper functionality with various Python code inputs
+
+These files complement the formal test suite by providing an easy way to test specific components in isolation during development.

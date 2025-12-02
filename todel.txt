@@ -23,11 +23,6 @@
 **Safe to delete?**: Partial
 **Reason**: Serves as blueprint; gaps remain.
 
-### code_reorganization_plan.md
-**Original functionality/plans**: Phased merge old_code to src/ (config, core, RAG, CLI, tests).
-**Implementation status**: Phases 1-2 complete; Phase 3 RAG partial (some empty files); CLI full.
-**Safe to delete?**: Partial
-**Reason**: Plan partially executed.
 
 ### idea_migration.md
 **Original functionality/plans**: Update arch docs; impl remaining components (validator, query_processor, etc.).
@@ -42,3 +37,23 @@
 **Reason**: Active architecture reference.
 
 *(Other guidance/docs: Yes)*
+
+Yes, there is duplicate code in the codebase. After my analysis, I found several instances of duplicated implementations:
+
+   1. Multiple versions of the same classes with enhanced functionality but preserved for backward compatibility:
+      - EmbeddingGenerator and EmbeddingGenerator_2 in src/embedding/embedder.py
+      - QdrantIndexer and QdrantIndexer_2 in src/retrieval/search.py
+      - ChunkPreprocessor and ChunkPreprocessor2 in src/preprocessing/chunk.py
+
+   2. Duplicate implementations of the same functions across different files:
+      - enhance_chunk method exists in multiple preprocessing classes (src/preprocessing/chunk.py, src/preprocessing/preprocessor.py)
+      - validate_chunk method exists in multiple preprocessing classes
+      - process method exists in multiple preprocessing classes
+
+   3. Code duplication within the same file: In src/preprocessing/chunk.py, there are two implementations of fundamental methods (enhance_chunk, validate_chunk, process) within the main
+      ChunkPreprocessor class and the ChunkPreprocessor2 class.
+
+  This appears to be an intentional design where enhanced versions of classes were created while preserving the original implementations with _2 suffixes for backward compatibility. The same
+  applies to methods that were enhanced with additional functionality.
+
+  However, the src/preprocessing/preprocessor.py file appears to have a duplicate of the ChunkPreprocessor functionality that is largely similar to the one in chunk.py.

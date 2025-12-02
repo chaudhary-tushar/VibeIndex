@@ -50,7 +50,6 @@ class ContextEnricher:
             chunk_data["context"] = {"summary": chunk_data["context"]}
 
         # Ensure all required fields have defaults
-        chunk_data.setdefault("location", {})
         chunk_data.setdefault("metadata", {})
         chunk_data.setdefault("documentation", {})
         chunk_data.setdefault("analysis", {})
@@ -101,7 +100,7 @@ class ContextEnricher:
                 summaries = await self.llm_client.generate_batch(batch_prompts)
 
                 # Assign summaries back
-                for chunk_obj, summary in zip(batch_chunks, summaries):
+                for chunk_obj, summary in zip(batch_chunks, summaries, strict=False):
                     enriched.append(self._process_chunk(chunk_obj, summary))
                 # Reset batch
                 batch_prompts = []
@@ -110,7 +109,7 @@ class ContextEnricher:
         # Handle last incomplete batch
         if batch_prompts:
             summaries = await self.llm_client.generate_batch(batch_prompts)
-            for chunk_obj, summary in zip(batch_chunks, summaries):
+            for chunk_obj, summary in zip(batch_chunks, summaries, strict=False):
                 enriched.append(self._process_chunk(chunk_obj, summary))
 
         print("✅ Finished enrichment with batching.")

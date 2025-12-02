@@ -343,7 +343,9 @@ def enrich(input, output, symbol_index, model):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input .txt file or directory of .txt files with prompts (one per line)")
+@click.option(
+    "--input", "-i", required=True, help="Input .txt file or directory of .txt files with prompts (one per line)"
+)
 @click.option("--output", "-o", help="Output file (jsonl/json/csv)")
 @click.option("--fmt", "-f", default="jsonl", type=click.Choice(["jsonl", "json", "csv"]), help="Output format")
 @click.option("--delay", default=0.2, type=float, help="Delay (seconds) between requests")
@@ -369,7 +371,8 @@ def api(host, port, reload):
     """
     Run the FastAPI server for code parsing.
     """
-    from app import main as app_main
+    from src.app import main as app_main
+
     app_main(host, port, reload)
 
 

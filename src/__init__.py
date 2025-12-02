@@ -10,7 +10,6 @@ from .config import QdrantConfig
 from .embedding import EmbeddingGenerator
 from .embedding import EmbeddingGenerator_2
 from .preprocessing import ChunkPreprocessor
-from .preprocessing import ChunkPreprocessor2
 
 # Enhanced preprocessing components (Phase 2)
 from .preprocessing import CodeChunk
