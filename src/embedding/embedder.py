@@ -9,6 +9,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
 
+import numpy as np
 import requests
 from rich.console import Console
 from rich.panel import Panel
@@ -21,6 +22,12 @@ from tqdm import tqdm
 from src.config import EmbeddingConfig
 
 console = Console()
+
+# Constants for embedding validation
+MIN_EMBEDDING_MAGNITUDE = 0.1
+MAX_EMBEDDING_MAGNITUDE = 1000
+MIN_EMBEDDING_VARIANCE = 0.0001
+HTTP_SUCCESS = 200
 
 
 class EmbeddingGenerator:
@@ -38,9 +45,9 @@ class EmbeddingGenerator:
 
     def validate_embedding_quality(self, embedding: list[float]) -> tuple[bool, str]:
         """Validate embedding quality based on statistical properties"""
+        # Check for empty embedding and dimension mismatch
         if not embedding:
             return False, "Empty embedding"
-
         if len(embedding) != self.config.embedding_dim:
             return False, f"Wrong dimension: expected {self.config.embedding_dim}, got {len(embedding)}"
 
@@ -51,17 +58,15 @@ class EmbeddingGenerator:
 
         # Check embedding magnitude (should be reasonable)
         magnitude = sum(x * x for x in embedding) ** 0.5
-        if magnitude < 0.1:
-            return False, f"Embedding magnitude too low: {magnitude}"
-        if magnitude > 1000:
-            return False, f"Embedding magnitude too high: {magnitude}"
+        # Combine magnitude checks to reduce return statements
+        if magnitude < MIN_EMBEDDING_MAGNITUDE or magnitude > MAX_EMBEDDING_MAGNITUDE:
+            magnitude_msg = "too low" if magnitude < MIN_EMBEDDING_MAGNITUDE else "too high"
+            return False, f"Embedding magnitude {magnitude_msg}: {magnitude}"
 
         # Check if embedding is too uniform (low entropy/variance)
-        import numpy as np
-
         arr = np.array(embedding)
         variance = np.var(arr)
-        if variance < 0.0001:  # Very low variance indicates uniform values
+        if variance < MIN_EMBEDDING_VARIANCE:  # Very low variance indicates uniform values
             return False, f"Embedding variance too low: {variance}, suggesting uniform/uninformative values"
 
         return True, "Valid embedding"
@@ -76,7 +81,7 @@ class EmbeddingGenerator:
             try:
                 response = requests.post(url, json=payload, timeout=self.config.timeout)
 
-                if response.status_code == 200:
+                if response.status_code == HTTP_SUCCESS:
                     result = response.json()
                     embedding = result.get("data")[0].get("embedding")
 
@@ -146,7 +151,7 @@ class EmbeddingGenerator:
 
         return embedded_chunks
 
-    def generate_all(self, chunks: list[dict], parallel: bool = True) -> list[dict]:
+    def generate_all(self, chunks: list[dict], *, parallel: bool = True) -> list[dict]:
         """Generate embeddings for all chunks with enhanced reporting"""
         console.print(
             Panel.fit(
@@ -201,7 +206,7 @@ class EmbeddingGenerator:
 
 
 # Preserve original EmbeddingGenerator with "_2" suffix for backward compatibility
-class EmbeddingGenerator_2:
+class EmbeddingGenerator2:
     """Original EmbeddingGenerator implementation (preserved for compatibility)"""
 
     def __init__(self, config: EmbeddingConfig):
@@ -222,7 +227,7 @@ class EmbeddingGenerator_2:
             try:
                 response = requests.post(url, json=payload, timeout=self.config.timeout)
 
-                if response.status_code == 200:
+                if response.status_code == HTTP_SUCCESS:
                     result = response.json()
                     return result.get("data")[0].get("embedding")
                 console.print(f"[yellow]Attempt {attempt + 1} failed: {response.status_code}[/yellow]")
@@ -261,7 +266,7 @@ class EmbeddingGenerator_2:
 
         return embedded_chunks
 
-    def generate_all(self, chunks: list[dict], parallel: bool = True) -> list[dict]:
+    def generate_all(self, chunks: list[dict], *, parallel: bool = True) -> list[dict]:
         """Generate embeddings for all chunks"""
         console.print(f"[cyan]Generating embeddings for {len(chunks)} chunks...[/cyan]")
         console.print(f"Model: {self.config.model_name} @ {self.config.model_url}")

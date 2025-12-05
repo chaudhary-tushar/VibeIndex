@@ -13,9 +13,9 @@ class BatchProcessor:
         self.config = config
         self.embedder = EmbeddingGenerator(config)
 
-    def process_batches(self, chunks: list[dict], parallel: bool = True) -> list[dict]:
+    def process_batches(self, chunks: list[dict], *, parallel: bool = True) -> list[dict]:
         """Process chunks in batches for embedding"""
-        return self.embedder.generate_all(chunks, parallel)
+        return self.embedder.generate_all(chunks, parallel=parallel)
 
     def validate_batch_sizes(self, chunks: list[dict]) -> bool:
         """Validate that batch sizes are appropriate"""
