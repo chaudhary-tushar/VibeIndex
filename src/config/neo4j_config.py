@@ -2,6 +2,8 @@
 Neo4j configuration with connectivity check
 """
 
+from contextlib import suppress
+
 from neo4j import GraphDatabase
 from pydantic import ConfigDict
 from pydantic import Field
@@ -23,19 +25,17 @@ class Neo4jConfig(BaseSettings):
         """
         Check if the Neo4j service is reachable by attempting a simple connection
         """
+        driver = None
         try:
             driver = GraphDatabase.driver(self.uri, auth=(self.username, self.password))
             with driver.session() as session:
                 # Run a simple query to test connectivity
                 result = session.run("RETURN 1 AS test")
                 record = result.single()
-                if record and record["test"] == 1:
-                    return True
-                return False
-        except Exception:
+                return bool(record and record["test"] == 1)
+        except Exception:  # noqa: BLE001 - Neo4j driver can raise multiple exceptions
             return False
         finally:
-            try:
-                driver.close()
-            except:
-                pass  # Driver might already be closed
+            if driver:
+                with suppress(BaseException):
+                    driver.close()

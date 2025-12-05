@@ -53,17 +53,18 @@ class QdrantConfig(BaseSettings):
         """
         Check if the Qdrant service is reachable by checking the service health
         """
-        try:
-            # Create a Qdrant client instance
-            client = QdrantClient(
-                host=self.host, port=self.port, api_key=self.qdrant_api_key if self.qdrant_api_key else None
-            )
+        # Create a Qdrant client instance
+        client = QdrantClient(
+            host=self.host, port=self.port, api_key=self.qdrant_api_key if self.qdrant_api_key else None
+        )
 
+        try:
             # Try to get the cluster info to verify connection
             client.get_collections()
-            return True
-        except Exception:
+        except Exception:  # noqa: BLE001 - Qdrant client can raise multiple exceptions
             return False
+        else:
+            return True
 
     def get_client(self) -> QdrantClient:
         """

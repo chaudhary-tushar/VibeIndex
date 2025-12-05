@@ -11,7 +11,7 @@ DATA_DIR = BASE_PATH / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def get_file_path(method: str, language: str = None, ext: str = "txt") -> Path:
+def get_file_path(method: str, language: str | None = None, ext: str = "txt") -> Path:
     """
     Constructs a file path for storing results based on method and language.
 
@@ -40,12 +40,10 @@ def get_file_path(method: str, language: str = None, ext: str = "txt") -> Path:
     base_file_name = language if language else method
 
     # Construct the full file path
-    file_path = target_directory / f"{base_file_name}.{ext}"
-
-    return file_path
+    return target_directory / f"{base_file_name}.{ext}"
 
 
-def save_data(data: Any, method: str, language: str = None, ext: str = None) -> Path:
+def save_data(data: Any, method: str, language: str | None = None, ext: str | None = None) -> Path:
     """
     Save data to an appropriate file format based on data type.
 
@@ -113,9 +111,10 @@ def _determine_file_extension(data: Any) -> str:  # noqa: C901, PLR0911, PLR0912
                     try:
                         # Try to parse as JSON
                         json.loads(first_element)
-                        return "json"
                     except json.JSONDecodeError:
                         pass
+                    else:
+                        return "json"
                 return "txt"
             return "json"  # Default to JSON for lists of other types
         # Empty list, default to JSON
@@ -123,7 +122,7 @@ def _determine_file_extension(data: Any) -> str:  # noqa: C901, PLR0911, PLR0912
     if isinstance(data, Document) or (hasattr(data, "__class__") and "Document" in data.__class__.__name__):
         # Check if it's a LlamaIndex Document
         return "json"
-    if hasattr(data, "__class__") and data.__class__.__name__ in ["Tree", "Node", "tree_sitter"]:
+    if hasattr(data, "__class__") and data.__class__.__name__ in {"Tree", "Node", "tree_sitter"}:
         # Tree-sitter related objects
         return "txt"
     if isinstance(data, str):
@@ -132,9 +131,10 @@ def _determine_file_extension(data: Any) -> str:  # noqa: C901, PLR0911, PLR0912
             try:
                 # Try to parse as JSON
                 json.loads(data)
-                return "json"
             except json.JSONDecodeError:
                 pass
+            else:
+                return "json"
         return "txt"
     # Default to txt for other data types
     return "txt"

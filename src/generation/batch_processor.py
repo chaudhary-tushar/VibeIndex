@@ -15,7 +15,11 @@ from rich.progress import track
 from .generator import LLMClient
 
 
-class BatchProcessor_2:
+class BatchProcessorError(Exception):
+    """Custom exception for BatchProcessor errors."""
+
+
+class BatchProcessor:
     """Batch processor class for prompts."""
 
     def __init__(self, delay: float = 0.2):
@@ -27,8 +31,9 @@ class BatchProcessor_2:
         """Load prompts from file or directory of .txt files."""
         path = Path(input_path).resolve()
         if not path.exists():
-            self.console.print(f"[red]❌ Input path not found: {input_path}[/red]")
-            raise FileNotFoundError(f"Input path not found: {input_path}")
+            error_message = f"Input path not found: {input_path}"
+            self.console.print(f"[red]❌ {error_message}[/red]")
+            raise FileNotFoundError(error_message)
 
         prompts: list[str] = []
         if path.is_file() and path.suffix.lower() == ".txt":
@@ -48,7 +53,8 @@ class BatchProcessor_2:
                     self.console.print(f"[green]✅ Loaded {len(file_prompts)} from {txt_file.name}[/green]")
             self.console.print(f"[bold green]📊 Total: {len(prompts)} prompts[/bold green]")
         else:
-            raise ValueError(f"❌ Unsupported input: {input_path} (use .txt file or dir)")
+            error_message = f"❌ Unsupported input: {input_path} (use .txt file or dir)"
+            raise ValueError(error_message)
         return prompts
 
     def process_prompts(
@@ -72,9 +78,12 @@ class BatchProcessor_2:
                 self.console.print(f"[bold green]Response:[/bold green]\n{content}\n")
                 result = {"prompt": prompt, "response": content}
             except Exception as e:
-                content = f"ERROR: {e!s}"
-                self.console.print(f"[bold red]{content}[/bold red]\n")
-                result = {"prompt": prompt, "response": content}
+                error_message = f"Error processing prompt: {e!s}"
+                self.console.print(f"[bold red]{error_message}[/bold red]\n")
+                result = {"prompt": prompt, "response": f"ERROR: {e!s}"}
+                # It's generally better to log the full exception for debugging
+                # and then raise a more specific, user-friendly error.
+                raise BatchProcessorError(error_message) from e
 
             results.append(result)
 
@@ -98,20 +107,27 @@ class BatchProcessor_2:
             json.dump(result, f)
             f.write("\n")
 
+    def _validate_format_and_save(self, output_file: str, results: list[dict[str, str]], fmt: str) -> None:
+        """Helper to validate format and save batch results."""
+        if fmt == "json":
+            with Path(output_file).open("w", encoding="utf-8") as f:
+                json.dump(results, f, indent=2)
+        elif fmt == "csv":
+            with Path(output_file).open("w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=["prompt", "response"])
+                writer.writeheader()
+                writer.writerows(results)
+        else:
+            error_message = f"Unsupported format '{fmt}'. Use 'jsonl', 'json', or 'csv'."
+            raise ValueError(error_message)
+        self.console.print(f"[green]💾 Saved to {output_file} ({fmt.upper()})[/green]")
+
     def _save_batch(self, output_file: str, results: list[dict[str, str]], fmt: str) -> None:
         """Save batch results in specified format."""
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         try:
-            if fmt == "json":
-                with Path(output_file).open("w", encoding="utf-8") as f:
-                    json.dump(results, f, indent=2)
-            elif fmt == "csv":
-                with Path(output_file).open("w", encoding="utf-8", newline="") as f:
-                    writer = csv.DictWriter(f, fieldnames=["prompt", "response"])
-                    writer.writeheader()
-                    writer.writerows(results)
-            else:
-                raise ValueError(f"Unsupported format '{fmt}'. Use 'jsonl', 'json', or 'csv'.")
-            self.console.print(f"[green]💾 Saved to {output_file} ({fmt.upper()})[/green]")
+            self._validate_format_and_save(output_file, results, fmt)
         except Exception as e:
-            self.console.print(f"[red]❌ Save failed: {e}[/red]")
+            error_message = f"Save failed: {e!s}"
+            self.console.print(f"[red]❌ {error_message}[/red]")
+            raise BatchProcessorError(error_message) from e

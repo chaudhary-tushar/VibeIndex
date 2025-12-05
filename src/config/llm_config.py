@@ -7,6 +7,8 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+BAD_REQUEST = 400  # 400 means it's reaching the service but has invalid parameters
+
 
 class LLMConfig(BaseSettings):
     """
@@ -38,18 +40,20 @@ class LLMConfig(BaseSettings):
 
             # Check if the response is successful
             # Status 200 means success, 400 might mean it's reaching the service but has invalid parameters
-            success = response.status_code in [200, 201, 400]
+            success = response.status_code in {200, 201, BAD_REQUEST}
 
             # For more accurate check, if it's a bad request, verify it's actually reaching the service
-            if response.status_code == 400:
+            if response.status_code == BAD_REQUEST:
                 try:
-                    response_json = response.json()
-                    # If we get a structured error response, the service is reachable
-                    return True
-                except Exception:
+                    response.json()
+                except requests.exceptions.JSONDecodeError:
                     # If we can't parse the JSON, it might be a real connectivity issue
                     return False
+                else:
+                    # If we get a structured error response, the service is reachable
+                    return True
+            else:
+                return success
 
-            return success
-        except Exception:
+        except requests.exceptions.RequestException:
             return False

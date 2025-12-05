@@ -7,6 +7,8 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+BAD_REQUEST = 400  # 400 means it's reaching the service but has invalid parameters
+
 
 class EmbeddingConfig(BaseSettings):
     """
@@ -33,20 +35,22 @@ class EmbeddingConfig(BaseSettings):
             response = requests.post(test_url, json=test_payload, timeout=self.timeout)
 
             # Check if the response is successful
-            success = response.status_code in {200, 201, 400}  # 400 means it's reaching the service
+            success = response.status_code in {200, 201, BAD_REQUEST}
 
             # For more accurate check, we might want to validate specific error codes
-            if response.status_code == 400:
+            if response.status_code == BAD_REQUEST:
                 # If it's a bad request, the service is reachable but there might be invalid parameters
                 # Check for the presence of error details in the response to distinguish from service not found
                 try:
-                    response_json = response.json()
-                    # If we get a structured error response, the service is reachable
-                    return True
-                except Exception:
+                    response.json()
+                except requests.exceptions.JSONDecodeError:
                     # If we can't parse the JSON, it might be a real connectivity issue
                     return False
+                else:
+                    # If we get a structured error response, the service is reachable
+                    return True
+            else:
+                return success
 
-            return success
-        except Exception:
+        except requests.exceptions.RequestException:
             return False

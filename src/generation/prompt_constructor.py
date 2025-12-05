@@ -2,7 +2,7 @@
 Prompt construction and context building for generation
 """
 
-import os
+import pathlib
 from abc import ABC
 from abc import abstractmethod
 from textwrap import dedent
@@ -34,7 +34,7 @@ class SymbolIndex:
         line = entry.get("line", "unknown line")
 
         # Make relative or just show basename
-        short_file = os.path.basename(file_path)
+        short_file = pathlib.Path(file_path).name
 
         # Enhanced info based on symbol kind
         if kind == "class":
@@ -62,7 +62,7 @@ class MultiLanguageContextPrompt(ContextPromptBuilder):
         # Build chunk-type specific context
         chunk_type_context = self._get_chunk_type_context(chunk)
 
-        prompt = dedent(f"""You are an expert software developer specializing in {chunk.get("language", "unknown")} and web development.
+        return dedent(f"""You are an expert software developer specializing in {chunk.get("language", "unknown")} and web development.
         Summarize the following code chunk in one clear, concise sentence.
         Focus on its purpose, behavior, and role in the application.
 
@@ -88,7 +88,6 @@ class MultiLanguageContextPrompt(ContextPromptBuilder):
 
         Summary (one sentence, no markdown, no prefix):
         """).strip()
-        return prompt
 
     def _build_dependency_context(self, chunk: dict[str, Any], symbol_index: SymbolIndex | None) -> str:
         """Build context about dependencies and relationships"""
@@ -226,4 +225,4 @@ class DjangoCodeContextPrompt(ContextPromptBuilder):
         {chunk.get("code", "").strip()}```
         Summary (one sentence, no markdown, no prefix):
         """).strip()
-        return prompt
+        return prompt  # noqa: RET504

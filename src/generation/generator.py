@@ -4,6 +4,7 @@ LLM client and generation utilities
 
 import os
 
+import httpx  # Added import for httpx
 from dotenv import load_dotenv
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -48,17 +49,26 @@ class LLMClient:
         """Generate responses for a batch of prompts"""
         if not prompts:
             return []
-        try:
-            chain = ChatPromptTemplate.from_messages([("user", "{input}")]) | self.llm | StrOutputParser()
-            # For simplicity, process one by one (can be optimized with async batch)
-            results = []
-            for prompt in prompts:
+
+        results = []
+        chain = ChatPromptTemplate.from_messages([("user", "{input}")]) | self.llm | StrOutputParser()
+
+        for prompt in prompts:
+            try:
                 result = await chain.ainvoke({"input": prompt})
                 results.append(result.strip())
-            return results
-        except Exception as e:
-            print(f"⚠️ Batch generation failed: {e}")
-            return ["Context generation failed." for _ in prompts]
+            except httpx.TimeoutException as e:  # Catch timeout specifically
+                print(f"⚠️ Timeout during generation for prompt '{prompt[:50]}...': {e}")
+                results.append("Context generation failed due to timeout.")
+            except httpx.RequestError as e:  # Catch other network errors
+                print(f"⚠️ Network error during generation for prompt '{prompt[:50]}...': {e}")
+                results.append("Context generation failed due to network error.")
+            except Exception as e:  # noqa: BLE001
+                # Catching generic Exception for graceful degradation and batch continuation.
+                # This ensures that a single prompt failure does not halt the entire batch.
+                print(f"⚠️ Unexpected error during generation for prompt '{prompt[:50]}...': {e}")
+                results.append("Context generation failed.")
+        return results
 
     def generate(self, prompt: str) -> str:
         """Generate response for a single prompt (synchronous)"""

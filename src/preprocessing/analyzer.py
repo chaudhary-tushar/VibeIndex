@@ -622,7 +622,7 @@ class Analyzer:
                                 for target in expr.targets:
                                     if isinstance(target.target, cst.Name):
                                         field_name = target.target.value
-                                        # Check if the assignment is a field definition like CharField, IntegerField, etc.  # noqa: E501
+                                        # Check if the assignment is a field definition like CharField, IntegerField, etc.
                                         if isinstance(expr.value, cst.Call) and isinstance(expr.value.func, cst.Name):
                                             field_type = expr.value.func.value
                                             if field_type in {
