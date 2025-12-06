@@ -21,11 +21,11 @@ from rich.table import Table
 from tqdm import tqdm
 
 # Import consolidated configuration for backward compatibility
-from ..config import EmbeddingConfig
-from ..config import QdrantConfig
+from src.config import EmbeddingConfig
+from src.config import QdrantConfig
 
 # Import embedding generator from correct location
-from ..embedding.embedder import EmbeddingGenerator
+from src.embedding.embedder import EmbeddingGenerator
 
 console = Console()
 
@@ -143,11 +143,11 @@ class QdrantIndexer:
         chunk_type = chunk.get("type", "unknown")
 
         # More specific type handling
-        if chunk_type in ["function", "method", "lambda"]:
+        if chunk_type in {"function", "method", "lambda"}:
             return f"{self.config.collection_prefix}_functions"
         if chunk_type == "class":
             return f"{self.config.collection_prefix}_classes"
-        if chunk_type in ["module", "file", "script"]:
+        if chunk_type in {"module", "file", "script"}:
             return f"{self.config.collection_prefix}_modules"
         # Default to modules for unknown types
         console.print(f"[yellow]Unknown chunk type '{chunk_type}', defaulting to modules collection[/yellow]")
@@ -162,7 +162,7 @@ class QdrantIndexer:
         payload.pop("embedding_text", None)  # Don't need full text in payload
 
         # Keep essential fields easily filterable with defaults
-        essential = {
+        return {
             "id": chunk["id"],
             "name": chunk["name"],
             "type": chunk["type"],
@@ -184,8 +184,6 @@ class QdrantIndexer:
             "indexed_at": chunk.get("embedding_timestamp", time.time()),
         }
 
-        return essential
-
     def optimize_batch_size(self, collection_name: str) -> int:
         """Dynamically determine optimal batch size based on collection size"""
         try:
@@ -201,7 +199,7 @@ class QdrantIndexer:
         except:
             return 100  # Default batch size
 
-    def index_chunks(self, chunks: list[dict], batch_size: int | None = None):
+    def index_chunks(self, chunks: list[dict], batch_size: int | None = None):  # noqa: C901
         """Index chunks in Qdrant with enhanced error handling and progress tracking"""
         console.print(f"[cyan]Enhanced indexing of {len(chunks)} chunks in Qdrant...[/cyan]")
 
@@ -320,7 +318,7 @@ class QdrantIndexer:
 
         # Search each collection
         all_results = {}
-        for collection_name in self.collections.keys():
+        for collection_name in self.collections:
             # Skip if collection filter is specified and doesn't match
             if collection_filter and collection_filter not in collection_name:
                 continue
@@ -369,7 +367,7 @@ class QdrantIndexer:
     def get_collection_stats(self) -> dict[str, dict]:
         """Get statistics for all collections"""
         stats = {}
-        for collection_name in self.collections.keys():
+        for collection_name in self.collections:
             try:
                 collection_info = self.client.get_collection(collection_name)
                 stats[collection_name] = {
@@ -454,7 +452,7 @@ class QdrantIndexer_2:
         """Determine which collection a chunk should go into"""
         chunk_type = chunk.get("type", "unknown")
 
-        if chunk_type in ["function", "method"]:
+        if chunk_type in {"function", "method"}:
             return f"{self.config.collection_prefix}_functions"
         if chunk_type == "class":
             return f"{self.config.collection_prefix}_classes"
@@ -469,7 +467,7 @@ class QdrantIndexer_2:
         payload.pop("embedding_text", None)  # Don't need full text in payload
 
         # Keep essential fields easily filterable
-        essential = {
+        return {
             "id": chunk["id"],
             "name": chunk["name"],
             "type": chunk["type"],
@@ -488,8 +486,6 @@ class QdrantIndexer_2:
             "relationships": chunk.get("relationships", {}),
             "analysis": chunk.get("analysis", {}),
         }
-
-        return essential
 
     def index_chunks(self, chunks: list[dict], batch_size: int = 100):
         """Index chunks in Qdrant"""
@@ -539,7 +535,7 @@ class QdrantIndexer_2:
             return
 
         # Search each collection
-        for collection_name in self.collections.keys():
+        for collection_name in self.collections:
             console.print(f"\n[yellow]Results from {collection_name}:[/yellow]")
 
             results = self.client.search(collection_name=collection_name, query_vector=query_embedding, limit=limit)
@@ -575,7 +571,7 @@ def index_from_embedded_json(
         return
 
     console.print(f"[cyan]Loading embedded chunks from {json_path}...[/cyan]")
-    with Path(path).open() as f:
+    with Path(path).open(encoding="utf-8") as f:
         data = json.load(f)
         chunks = data.get("chunks", [])
     console.print(f"[green]Loaded {len(chunks)} chunks[/green]")

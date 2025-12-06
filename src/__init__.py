@@ -8,7 +8,7 @@ from .config import QdrantConfig
 
 # Enhanced embedding components (Phase 2)
 from .embedding import EmbeddingGenerator
-from .embedding import EmbeddingGenerator_2
+from .embedding import EmbeddingGenerator2
 from .preprocessing import ChunkPreprocessor
 
 # Enhanced preprocessing components (Phase 2)
@@ -19,16 +19,15 @@ from .retrieval import QdrantIndexer
 from .retrieval import QdrantIndexer_2
 
 __all__ = [
-    # Configuration
-    "EmbeddingConfig",
-    "QdrantConfig",
+    "ChunkPreprocessor",
     # Preprocessing
     "CodeChunk",
-    "ChunkPreprocessor",
-    "ChunkPreprocessor2",
+    # Configuration
+    "EmbeddingConfig",
     # Embedding
     "EmbeddingGenerator",
-    "EmbeddingGenerator_2",
+    "EmbeddingGenerator2",
+    "QdrantConfig",
     # Retrieval
     "QdrantIndexer",
     "QdrantIndexer_2",

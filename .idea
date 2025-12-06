@@ -1,26 +1,32 @@
+# RAG System Design and Implementation Guide
+
 I'll help you design a comprehensive RAG system for code indexing. Let me break down the architecture and processes you need.
 
 ## Current Implementation Status
 
 The core codebase structure is in place, and as of the latest updates, the **Reranking Layer** has been successfully implemented with all its components:
 
-*   [x] `src/reranking/input_processor.py` - Reranking Input Processor
-*   [x] `src/reranking/cross_encoder.py` - Cross-Encoder Model
-*   [x] `src/reranking/scoring.py` - Relevance Scoring
-*   [x] `src/reranking/semantic_similarity.py` - Semantic Similarity (Re-embedding)
-*   [x] `src/reranking/final_ranking.py` - Final Ranking Algorithm
-*   [x] `src/reranking/quality_assurance.py` - Quality Assurance Filter
-*   [x] `src/reranking/main.py` - Main Reranker orchestrator
+- [x] `src/reranking/input_processor.py` - Reranking Input Processor
+- [x] `src/reranking/cross_encoder.py` - Cross-Encoder Model
+- [x] `src/reranking/scoring.py` - Relevance Scoring
+- [x] `src/reranking/semantic_similarity.py` - Semantic Similarity (Re-embedding)
+- [x] `src/reranking/final_ranking.py` - Final Ranking Algorithm
+- [x] `src/reranking/quality_assurance.py` - Quality Assurance Filter
+- [x] `src/reranking/main.py` - Main Reranker orchestrator
 
-## Architecture Overview## Essential Tools & Components You Need
+## Architecture Overview
+
+## Essential Tools & Components You Need
 
 ### 1. **Code Parsing & Chunking Tools**
+
 - **Tree-sitter**: Language-agnostic parser for AST extraction
 - **Rope** or **libcst** (Python): For intelligent code splitting
 - **ctags/universal-ctags**: For extracting code symbols
 - **Purpose**: Parse code into semantic chunks (functions, classes, methods) rather than arbitrary text chunks
 
 ### 2. **Preprocessing Pipeline**
+
 - **AST-based chunking**: Preserve code structure and context
 - **Metadata extraction**:
   - File paths, line numbers
@@ -31,7 +37,9 @@ The core codebase structure is in place, and as of the latest updates, the **Rer
 - **Deduplication**: Remove duplicate code blocks
 
 ### 3. **Chunking Strategy for Code**
+
 Choose one or combine:
+
 - **Function/Method level**: Each function as separate chunk
 - **Class level**: Entire classes with methods
 - **Semantic blocks**: Related code grouped together
@@ -39,12 +47,14 @@ Choose one or combine:
 - **Optimal chunk size**: 512-1024 tokens per chunk for embeddings
 
 ### 4. **Qdrant Configuration**
+
 - **Multiple collections strategy**:
   - `code_functions`: Individual functions/methods
   - `code_classes`: Class definitions
   - `documentation`: Comments, docstrings, README
   - `file_level`: High-level file summaries
 - **Payload structure**:
+
   ```json
   {
     "code": "actual code text",
@@ -61,6 +71,7 @@ Choose one or combine:
   ```
 
 ### 5. **Hybrid Search Setup in Qdrant**
+
 - Enable **sparse vectors** (BM25) alongside dense vectors
 - Use **payload indexing** for metadata filters
 - Configure **HNSW parameters**:
@@ -68,6 +79,7 @@ Choose one or combine:
   - ef_construct: 128-200
 
 ### 6. **Retrieval Enhancement Tools**
+
 - **Reranker model**: Use a cross-encoder (e.g., BGE-reranker) to rerank top-k results
 - **Query expansion**: Expand code queries with synonyms/related terms
 - **Contextual retrieval**: Include neighboring code chunks
@@ -88,30 +100,39 @@ Choose one or combine:
 ## Key Strategies for Highest Accuracy
 
 ### 1. **Multi-level Indexing**
+
 Index at multiple granularities:
+
 - File summaries (high-level overview)
 - Class definitions (medium-level)
 - Function bodies (fine-grained)
 
 ### 2. **Contextual Embedding**
+
 Include context in embeddings:
+
 - Function + its class definition
 - Function + docstring + imports
 - Code + surrounding comments
 
 ### 3. **Metadata-Rich Search**
+
 Combine vector search with filters:
-```
+
+```text
 Query: "authentication function"
 Filters: language=python, type=function, has_docstring=true
 ```
 
 ### 4. **Dual Representation**
+
 - Store both **original code** and **cleaned/commented version**
 - Embed cleaned version for better semantic matching
 
 ### 5. **Parent-Child Relationships**
+
 Store references to:
+
 - Parent file/class
 - Called functions
 - Import dependencies
@@ -127,6 +148,7 @@ Store references to:
 ## Docker Compose Setup Structure
 
 You'll need:
+
 - **qdrant** service
 - **embeddinggamma** service
 - **indexing-worker** service (your custom indexing pipeline)
@@ -136,15 +158,18 @@ You'll need:
 ## Critical Configuration Parameters
 
 **EmbeddingGamma:**
+
 - Batch size: 32-64 for optimal throughput
 - Max sequence length: 512-1024 tokens
 
 **Qdrant:**
+
 - Collection size: Estimate ~1000-5000 vectors per 1000 LOC
 - Memory: Allocate based on vector count (4GB minimum)
 - Disk: SSD recommended for indexing speed
 
 **Retrieval:**
+
 - Top-k: 20-50 candidates
 - Rerank to top-5-10
 - Use score thresholds to filter low-quality matches

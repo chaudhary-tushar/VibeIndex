@@ -16,7 +16,7 @@ from src.config import EmbeddingConfig
 from src.config import QdrantConfig
 from src.config import settings
 from src.embedding.embedder import EmbeddingGenerator
-from src.generation import BatchProcessor_2
+from src.generation import BatchProcessor
 from src.generation.context_builder import ContextEnricher
 from src.generation.context_builder import get_summarized_chunks_ids
 from src.generation.context_builder import stats_check
@@ -348,7 +348,7 @@ async def api_batch_prompts(request: dict):
     try:
         if model:
             os.environ["LLM_MODEL"] = model
-        processor = BatchProcessor_2(delay=delay)
+        processor = BatchProcessor(delay=delay)
         prompts = processor.load_prompts(input_path)
         results = processor.process_prompts(prompts, output_file, output_format)
         return {"message": f"Processed {len(results)} prompts", "num_prompts": len(prompts), "output_file": output_file}
@@ -673,7 +673,7 @@ def batch(input_path, output, fmt, delay, model):
     click.echo(f"🔄 Batch processing prompts from: {input_path}")
     if model:
         os.environ["LLM_MODEL"] = model
-    processor = BatchProcessor_2(delay=delay)
+    processor = BatchProcessor(delay=delay)
     prompts = processor.load_prompts(input_path)
     processor.process_prompts(prompts, output, fmt)
     click.echo("\n✅ Batch processing complete!")

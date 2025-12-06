@@ -64,8 +64,7 @@ class CodeRAG_2:
         console.print(f"[red]{prompt}[/red]")
 
         # 5. Query LLM
-        answer = self._ask_llm(prompt)
-        return answer
+        return self._ask_llm(prompt)
 
     def _build_rag_prompt(self, query: str, chunks: list[Any]) -> str:
         """Build prompt with retrieved code"""
