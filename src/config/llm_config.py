@@ -7,6 +7,8 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from .settings import settings
+
 BAD_REQUEST = 400  # 400 means it's reaching the service but has invalid parameters
 
 
@@ -15,8 +17,16 @@ class LLMConfig(BaseSettings):
     Configuration for LLM generation services
     """
 
-    model_url: str = Field(..., description="API endpoint for LLM generation model (Ollama/Docker)")
-    model_name: str = Field(..., description="Name of the LLM generation model")
+    model_url: str = Field(
+        default_factory=lambda: settings.generation_model_url,
+        description="API endpoint for LLM generation model (Ollama/Docker)",
+    )
+    model_name: str = Field(
+        default_factory=lambda: settings.generation_model_name, description="Name of the LLM generation model"
+    )
+    model_provider: str = Field(
+        default_factory=lambda: settings.generation_model_provider, description="Provider of the LLM API"
+    )
     timeout: int = Field(default=60, description="Timeout in seconds for LLM requests")
     max_retries: int = Field(default=3, description="Number of retries for failed requests")
 

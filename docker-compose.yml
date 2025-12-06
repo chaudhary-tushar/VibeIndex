@@ -31,7 +31,7 @@ services:
 
 models:
   infer:
-    model: ai/granite-4.0-h-micro
+    model: ai/llama3.2:latest
     context_size: 32768
     runtime_flags:
       - ""

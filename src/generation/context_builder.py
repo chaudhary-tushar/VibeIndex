@@ -24,7 +24,7 @@ def _validate_table_name(table_name: str) -> str:
 
 def update_summary(record_id: str, summary: str):
     """Update summary for a chunk in the database"""
-    db_path = Path("enhanced_chunks.db")
+    db_path = Path("./data/build/enhanced_chunks.db")
     table_name = _validate_table_name("enhanced_code_chunks")
     try:
         conn = sqlite3.connect(db_path)
@@ -138,7 +138,7 @@ class ContextEnricher:
 
 def get_summarized_chunks_ids() -> list[str]:
     """Get IDs of chunks that already have summaries"""
-    db_path = Path("enhanced_chunks.db")
+    db_path = Path("./data/build/enhanced_chunks.db")
     table_name = _validate_table_name("enhanced_code_chunks")
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()

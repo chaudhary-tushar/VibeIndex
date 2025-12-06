@@ -1,3 +1,4 @@
+# ruff: noqa: BLE001
 import asyncio
 import json
 import os
@@ -154,10 +155,7 @@ async def api_preprocess_chunks(request: dict):
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Preprocess
         preprocessor = ChunkPreprocessor()
@@ -202,10 +200,7 @@ async def api_embed_chunks(request: dict):
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Generate embeddings
         config = EmbeddingConfig(model_url=model_url, model_name=model_name)
@@ -250,11 +245,7 @@ async def api_index_chunks(request: dict):
         with Path(input_file).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Index in Qdrant
         qdrant_config = QdrantConfig(host=host, port=port, collection_prefix=collection_prefix)
@@ -291,11 +282,7 @@ async def api_enrich_chunks(request: dict):
         with Path(input_file).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         summarized_ids = set(get_summarized_chunks_ids())
         filtered_chunks = [item for item in chunks if item.get("id") not in summarized_ids]
@@ -397,7 +384,8 @@ def ingest(path, verbose):
     """
     Run the data ingestion pipeline - parse code into chunks.
     """
-    settings.project_path = Path(path).resolve()
+    # settings.project_path = Path(path).resolve()
+    settings.initialize_project(path)
     click.echo(f"Running code parsing pipeline for: {path}")
 
     try:
@@ -544,11 +532,7 @@ def index(input, host, port, collection_prefix, verbose):
         with Path(input).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Index in Qdrant
         qdrant_config = QdrantConfig(host=host, port=port, collection_prefix=collection_prefix)
@@ -603,8 +587,7 @@ def hybrid_setup(collection_name, chunks_path):
 @click.option("--input", "-i", required=True, help="Input JSON file with chunks")
 @click.option("--output", "-o", required=True, help="Output enriched JSON file")
 @click.option("--symbol-index", "-s", help="Optional symbol index JSON file")
-@click.option("--model", "-m", default="ai/llama3.2:latest", help="LLM model to use")
-def enrich(input, output, symbol_index, model):
+def enrich(input, output, symbol_index):
     """
     Enrich code chunks with AI-generated context summaries.
     """
@@ -616,10 +599,7 @@ def enrich(input, output, symbol_index, model):
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         summarized_ids = set(get_summarized_chunks_ids())
         filtered_chunks = [item for item in chunks if item.get("id") not in summarized_ids]
@@ -630,10 +610,6 @@ def enrich(input, output, symbol_index, model):
         if symbol_index and Path(symbol_index).exists():
             with Path(symbol_index).open(encoding="utf-8") as f:
                 symbol_index_data = json.load(f)
-
-        # Set model if provided
-        if model:
-            os.environ["LLM_MODEL"] = model
 
         # Enrich
         enricher = ContextEnricher(chunks=filtered_chunks, symbol_index=symbol_index_data)

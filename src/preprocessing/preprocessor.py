@@ -3,12 +3,18 @@ Enhanced preprocessing for code chunks before embedding and indexing
 """
 
 import hashlib
+import json
+import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 
 from rich.console import Console
 from tqdm import tqdm
 
+from src.config.data_store import DATA_DIR
+
 console = Console()
+DB_PATH = DATA_DIR / "build/enhanced_chunks.db"
 
 
 @dataclass
@@ -113,6 +119,86 @@ class ChunkPreprocessor:
 
         return True
 
+    def fill_db(self, chunks: list[dict]) -> None:
+        conn = sqlite3.connect(Path(DB_PATH))
+        cur = conn.cursor()
+
+        # 3️⃣ Create table (with flexible text columns for complex/nested fields)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS enhanced_code_chunks (
+            id TEXT PRIMARY KEY,
+            type TEXT,
+            name TEXT,
+            code TEXT,
+            file_path TEXT,
+            language TEXT,
+            start_line INTEGER,
+            end_line INTEGER,
+            qualified_name TEXT,
+            location TEXT,
+            docstring TEXT,
+            signature TEXT,
+            complexity INTEGER,
+            dependencies TEXT,
+            parent TEXT,
+            "references" TEXT,
+            defines TEXT,
+            metadata TEXT,
+            documentation TEXT,
+            analysis TEXT,
+            relationships TEXT,
+            context TEXT,
+            summary TEXT
+        )
+        """)
+
+        # 4️⃣ Insert data safely
+        for chunk in chunks:
+            # Serialize nested fields (lists/dicts) as JSON strings
+            def safe_json(value):
+                if value is None:
+                    return None
+                if isinstance(value, (dict, list)):
+                    return json.dumps(value, ensure_ascii=False)
+                return str(value)
+
+            row = (
+                chunk.get("id"),
+                chunk.get("type"),
+                chunk.get("name"),
+                chunk.get("code"),
+                chunk.get("file_path"),
+                chunk.get("language"),
+                chunk.get("start_line"),
+                chunk.get("end_line"),
+                chunk.get("qualified_name", ""),
+                safe_json(chunk.get("location")),
+                chunk.get("docstring"),
+                chunk.get("signature"),
+                chunk.get("complexity", 0),
+                safe_json(chunk.get("dependencies")),
+                chunk.get("parent"),
+                safe_json(chunk.get("references")),
+                safe_json(chunk.get("defines")),
+                safe_json(chunk.get("metadata")),
+                safe_json(chunk.get("documentation")),
+                safe_json(chunk.get("analysis")),
+                safe_json(chunk.get("relationships")),
+                safe_json(chunk.get("context")),
+                None,
+            )
+
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO enhanced_code_chunks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+                row,
+            )
+
+        # 5️⃣ Commit & close
+        conn.commit()
+        conn.close()
+
     def process(self, chunks: list[dict]) -> list[dict]:
         """Full preprocessing pipeline"""
         self.stats["total"] = len(chunks)
@@ -128,7 +214,9 @@ class ChunkPreprocessor:
             if self.validate_chunk(enhanced):
                 enhanced_chunks.append(enhanced)
 
+        self.fill_db(enhanced_chunks)
         console.print(f"[green]✓ Preprocessing complete: {len(enhanced_chunks)} chunks ready[/green]")
+        console.print(f"[green]✓ SQL insertion complete: {len(enhanced_chunks)} chunks filled db[/green]")
         console.print(f"  - Duplicates removed: {self.stats['duplicates']}")
         console.print(f"  - Too large (skipped): {self.stats['too_large']}")
 
