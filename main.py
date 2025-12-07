@@ -384,7 +384,6 @@ def ingest(path, verbose):
     """
     Run the data ingestion pipeline - parse code into chunks.
     """
-    # settings.project_path = Path(path).resolve()
     settings.initialize_project(path)
     click.echo(f"Running code parsing pipeline for: {path}")
 
@@ -404,25 +403,23 @@ def ingest(path, verbose):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
-@click.option("--output", "-o", help="Output file for preprocessed chunks (JSON)")
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def preprocess(input, output, verbose):
+def preprocess(project, verbose):
     """
     Preprocess code chunks (deduplication, enhancement).
     """
-    click.echo(f"Preprocessing chunks from: {input}")
+    click.echo(f"Preprocessing chunks for project: {project}")
+    settings.initialize_project(project)
+    input_chunks = settings.get_chunks_path()
+    output = settings.get_preprocessed_chunks_path()
 
     try:
         # Load chunks
-        with Path(input).open(encoding="utf-8") as f:
+        with Path(input_chunks).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Preprocess
         preprocessor = ChunkPreprocessor()
@@ -458,28 +455,25 @@ def preprocess(input, output, verbose):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
-@click.option("--output", "-o", help="Output file for embedded chunks (JSON)")
-@click.option("--model-url", default="http://localhost:12434/engines/llama.cpp/v1", help="Embedding model URL")
-@click.option("--model-name", default="ai/embeddinggemma", help="Embedding model name")
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def embed(input, output, model_url, model_name, verbose):
+def embed(project, output, model_url, model_name, verbose):
     """
     Generate embeddings for code chunks.
     """
-    click.echo(f"Generating embeddings for chunks from: {input}")
+    click.echo(f"Generating embeddings for chunks for project : {project}")
+    settings.initialize_project(project)
+    processed_chunks = settings.get_preprocessed_chunks_path()
+    output = settings.get_embedded_chunks_path()
+
     click.echo(f"Model: {model_name} @ {model_url}")
 
     try:
         # Load chunks
-        with Path(input).open(encoding="utf-8") as f:
+        with Path(processed_chunks).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Generate embeddings
         config = EmbeddingConfig(model_url=model_url, model_name=model_name)
@@ -515,12 +509,12 @@ def embed(input, output, model_url, model_name, verbose):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input JSON file with embedded chunks")
+@click.option("--project", "-p", required=True, help="Input JSON file with embedded chunks")
 @click.option("--host", default="localhost", help="Qdrant host")
 @click.option("--port", default=6333, type=int, help="Qdrant port")
 @click.option("--collection-prefix", default="tipsy", help="Collection prefix")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def index(input, host, port, collection_prefix, verbose):
+def index(project, host, port, collection_prefix, verbose):
     """
     Index embedded chunks in Qdrant vector database.
     """
@@ -584,18 +578,20 @@ def hybrid_setup(collection_name, chunks_path):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
-@click.option("--output", "-o", required=True, help="Output enriched JSON file")
-@click.option("--symbol-index", "-s", help="Optional symbol index JSON file")
-def enrich(input, output, symbol_index):
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
+def enrich(project):
     """
     Enrich code chunks with AI-generated context summaries.
     """
-    click.echo(f"Enriching chunks from {input} to {output}")
+    click.echo(f"Enriching chunks for project {project}")
+    settings.initialize_project(project)
+    processed_chunks = settings.get_preprocessed_chunks_path()
+    symbol_index = settings.get_symbol_index_path()
+    output = settings.get_embedded_chunks_path()
 
     try:
         # Load chunks
-        with Path(input).open(encoding="utf-8") as f:
+        with Path(processed_chunks).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
@@ -636,7 +632,7 @@ def enrich(input, output, symbol_index):
 
 @cli.command()
 @click.option(
-    "--input", "-i", required=True, help="Input .txt file or directory of .txt files with prompts (one per line)"
+    "--project", "-p", required=True, help="Input .txt file or directory of .txt files with prompts (one per line)"
 )
 @click.option("--output", "-o", help="Output file (jsonl/json/csv)")
 @click.option("--fmt", "-f", default="jsonl", type=click.Choice(["jsonl", "json", "csv"]), help="Output format")
@@ -678,7 +674,7 @@ def api(host, port, reload):
 @click.option("--llm-url", default="http://localhost:12434/", help="LLM API URL")
 @click.option("--llm-model", default="ai/llama3.2:latest", help="LLM model")
 @click.option("--embedding-model", default="ai/embeddinggemma", help="Embedding model")
-def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embedding_model):
+def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embedding_model):  # noqa: PLR0913, PLR0917
     """
     Interactive RAG query CLI using CodeRAG_2
     """

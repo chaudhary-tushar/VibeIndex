@@ -11,10 +11,9 @@ from pathlib import Path
 from rich.console import Console
 from tqdm import tqdm
 
-from src.config.data_store import DATA_DIR
+from src.config import settings
 
 console = Console()
-DB_PATH = DATA_DIR / "build/enhanced_chunks.db"
 
 
 @dataclass
@@ -120,7 +119,8 @@ class ChunkPreprocessor:
         return True
 
     def fill_db(self, chunks: list[dict]) -> None:
-        conn = sqlite3.connect(Path(DB_PATH))
+        chunks_db = settings.get_project_db_path()
+        conn = sqlite3.connect(Path(chunks_db))
         cur = conn.cursor()
 
         # 3️⃣ Create table (with flexible text columns for complex/nested fields)

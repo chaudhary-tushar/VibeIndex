@@ -1,4 +1,3 @@
-import hashlib
 import json
 from pathlib import Path
 
@@ -54,6 +53,14 @@ class ProjectManager:
             self.db.update({"pipeline_state": pipeline_state}, self.query.id == project_id)
 
 
+class ProjectError(ValueError):
+    """Custom exception for errors in the application configuration."""
+
+    def __init__(self, message="Project not initialized. Call initialize_project() first."):
+        self.message = message
+        super().__init__(self.message)
+
+
 class Settings(BaseSettings):
     # Embedding Configuration
     embedding_model_url: str
@@ -96,7 +103,11 @@ class Settings(BaseSettings):
         If the project already exists in the database, load its information
         Otherwise, create a new project entry and associated directories
         """
-        path = Path(project_path).resolve()
+        path = Path(project_path)
+
+        # Use relative path if it's not already absolute
+        if not path.is_absolute():
+            path = Path.cwd() / path
 
         # Check if project already exists in the database
         existing_project = self.project_manager.get_project_by_path(str(path))
@@ -112,14 +123,13 @@ class Settings(BaseSettings):
             # Create new project
             self.project_path = path
 
-            # Generate a unique project ID based on the path
-            path_str = str(path)
-            self.project_id = hashlib.md5(path_str.encode()).hexdigest()[:12]
+            # Use project name only for ID (no more SHA ID)
+            self.project_id = path.name
             self.project_name = path.name
 
-            # Create a project-specific data directory
+            # Create a project-specific data directory using relative path
             data_dir = Path("data")
-            project_data_dir = data_dir / f"project_{self.project_name}_{self.project_id}"
+            project_data_dir = data_dir / f"project_{self.project_name}"
             project_data_dir.mkdir(parents=True, exist_ok=True)
             self.project_data_dir = project_data_dir
 
@@ -131,7 +141,7 @@ class Settings(BaseSettings):
         Get the path to the project-specific configuration file
         """
         if self.project_data_dir is None:
-            raise ValueError("Project not initialized. Call initialize_project() first.")
+            raise ProjectError
         return self.project_data_dir / "project_config.json"
 
     def get_chunks_path(self) -> Path:
@@ -139,15 +149,23 @@ class Settings(BaseSettings):
         Get the path to the chunks.json file for the current project
         """
         if self.project_data_dir is None:
-            raise ValueError("Project not initialized. Call initialize_project() first.")
+            raise ProjectError
         return self.project_data_dir / "chunks.json"
+
+    def get_symbol_index_path(self) -> Path:
+        """
+        Get the path to the chunks.json file for the current project
+        """
+        if self.project_data_dir is None:
+            raise ProjectError
+        return self.project_data_dir / "symbol_index.json"
 
     def get_embedded_chunks_path(self) -> Path:
         """
         Get the path to the embedded_chunks.json file for the current project
         """
         if self.project_data_dir is None:
-            raise ValueError("Project not initialized. Call initialize_project() first.")
+            raise ProjectError
         return self.project_data_dir / "embedded_chunks.json"
 
     def get_preprocessed_chunks_path(self) -> Path:
@@ -155,7 +173,7 @@ class Settings(BaseSettings):
         Get the path to the preprocessed_chunks.json file for the current project
         """
         if self.project_data_dir is None:
-            raise ValueError("Project not initialized. Call initialize_project() first.")
+            raise ProjectError
         return self.project_data_dir / "preprocessed_chunks.json"
 
     def get_project_db_path(self) -> Path:
@@ -163,15 +181,15 @@ class Settings(BaseSettings):
         Get the path to the project-specific tinyDB file for additional project data
         """
         if self.project_data_dir is None:
-            raise ValueError("Project not initialized. Call initialize_project() first.")
-        return self.project_data_dir / "project_data.json"
+            raise ProjectError
+        return self.project_data_dir / "enhanced_chunks.db"
 
     def save_project_config(self):
         """
         Save project-specific configuration to a file
         """
         if self.project_data_dir is None:
-            raise ValueError("Project not initialized. Call initialize_project() first.")
+            raise ProjectError
 
         config_data = {
             "project_path": str(self.project_path),
@@ -183,7 +201,7 @@ class Settings(BaseSettings):
         }
 
         config_path = self.get_project_config_path()
-        with open(config_path, "w", encoding="utf-8") as f:
+        with Path(config_path).open("w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=2, default=str)  # default=str handles datetime objects
 
 

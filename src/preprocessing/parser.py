@@ -15,7 +15,6 @@ from tree_sitter import Parser
 from tree_sitter import Tree
 
 from src.config import settings
-from src.config.data_store import DATA_DIR
 from src.config.data_store import save_data
 
 from .analyzer import Analyzer
@@ -212,9 +211,7 @@ class CodeParser:
 
     def save_results(self):
         """Save parsed chunks to JSON"""
-        output_path = DATA_DIR / self.project_path.name
-        output_path.mkdir(parents=True, exist_ok=True)
-        output_file = output_path / "chunks.json"
+        output_file = settings.get_chunks_path()
 
         data = {
             "project_path": str(self.project_path),
@@ -270,9 +267,7 @@ class CodeParser:
 
     def save_symbol_index(self):
         """Save symbol index to JSON (from enhanced.py)"""
-        output_path = DATA_DIR / self.project_path.name
-        output_path.mkdir(parents=True, exist_ok=True)
-        output_file = output_path / "symbol_index.json"
+        output_file = settings.get_symbol_index_path()
         with Path(output_file).open("w", encoding="utf-8") as f:
             json.dump(self.symbol_index, f, indent=4)
         console.print(f"[green]✓ Symbol index saved to: {output_file}[/green]")
