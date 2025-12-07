@@ -4,8 +4,9 @@ Context enrichment and building utilities
 
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
+
+from src.config import settings
 
 from .generator import LLMClient
 from .prompt_constructor import ContextPromptBuilder
@@ -24,7 +25,7 @@ def _validate_table_name(table_name: str) -> str:
 
 def update_summary(record_id: str, summary: str):
     """Update summary for a chunk in the database"""
-    db_path = Path("./data/build/enhanced_chunks.db")
+    db_path = settings.get_project_db_path()
     table_name = _validate_table_name("enhanced_code_chunks")
     try:
         conn = sqlite3.connect(db_path)
@@ -138,7 +139,7 @@ class ContextEnricher:
 
 def get_summarized_chunks_ids() -> list[str]:
     """Get IDs of chunks that already have summaries"""
-    db_path = Path("./data/build/enhanced_chunks.db")
+    db_path = settings.get_project_db_path()
     table_name = _validate_table_name("enhanced_code_chunks")
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()

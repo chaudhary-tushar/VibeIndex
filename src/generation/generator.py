@@ -72,9 +72,7 @@ class LLMClient:
             except httpx.RequestError as e:  # Catch other network errors
                 print(f"⚠️ Network error during generation for prompt '{prompt[:50]}...': {e}")
                 results.append("Context generation failed due to network error.")
-            except Exception as e:  # noqa: BLE001
-                # Catching generic Exception for graceful degradation and batch continuation.
-                # This ensures that a single prompt failure does not halt the entire batch.
+            except Exception as e:
                 print(f"⚠️ Unexpected error during generation for prompt '{prompt[:50]}...': {e}")
                 results.append("Context generation failed.")
         return results

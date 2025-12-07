@@ -160,6 +160,12 @@ class Settings(BaseSettings):
             raise ProjectError
         return self.project_data_dir / "symbol_index.json"
 
+    def get_enriched_chunks_path(self) -> Path:
+        """Get path to summarized chunks"""
+        if self.project_data_dir is None:
+            raise ProjectError
+        return self.project_data_dir / "enriched_chunks.json"
+
     def get_embedded_chunks_path(self) -> Path:
         """
         Get the path to the embedded_chunks.json file for the current project

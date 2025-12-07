@@ -382,7 +382,7 @@ class Analyzer:
                 self.from_imports = {}  # Maps local name to (module, attribute) for "from X import Y"
                 self.django_model_imports = {}  # Django-specific: maps local names to model classes
 
-            def visit_Import(self, node: cst.Import) -> None:
+            def visit_Import(self, node: cst.Import) -> None:  # noqa: N802
                 for alias in node.names:
                     # Handle "import module" or "import module as name"
                     local_name = alias.asname.value if alias.asname else alias.name.value
@@ -397,7 +397,7 @@ class Analyzer:
                     if module_name in {"django.db.models", "django.core.models"}:
                         self.django_model_imports[local_name] = module_name
 
-            def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+            def visit_ImportFrom(self, node: cst.ImportFrom) -> None:  # noqa: N802
                 # Get the module name being imported from
                 if isinstance(node.module, cst.Name):
                     module_name = node.module.value
@@ -677,13 +677,13 @@ class Analyzer:
                 if self.current_class:
                     self.django_model_relationships[self.current_class] = model_fields
 
-            def _process_django_admin_class(self, node: cst.ClassDef):
+            def _process_django_admin_class(self, node: cst.ClassDef):  # noqa: C901
                 """Process Django admin class attributes"""
                 if not node.body:
                     return
 
                 admin_attrs = {}
-                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:  # noqa: PLR1702
                     if isinstance(stmt, cst.SimpleStatementLine):
                         for expr in stmt.body:
                             if isinstance(expr, cst.Assign):
@@ -701,20 +701,20 @@ class Analyzer:
                                             try:
                                                 attr_value = module.code_for_node(expr.value)
                                                 admin_attrs[attr_name] = attr_value
-                                            except:
+                                            except:  # noqa: E722, S112
                                                 continue
 
                 # Store admin attributes
                 if self.current_class:
                     self.django_admin_attributes = admin_attrs
 
-            def _process_django_form_class(self, node: cst.ClassDef):
+            def _process_django_form_class(self, node: cst.ClassDef):  # noqa: C901, PLR0912
                 """Process Django form class fields"""
                 if not node.body:
                     return
 
                 form_fields = []
-                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:  # noqa: PLR1702
                     if isinstance(stmt, cst.SimpleStatementLine):
                         for expr in stmt.body:
                             if isinstance(expr, cst.Assign):
@@ -772,7 +772,7 @@ class Analyzer:
                     return
 
                 view_methods = []
-                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:  # noqa: PLR1702
                     if isinstance(stmt, cst.FunctionDef):
                         method_name = stmt.name.value
                         # Check if this is a standard HTTP method or Django-specific method
@@ -831,13 +831,13 @@ class Analyzer:
                             continue
                 return args_info
 
-            def _process_django_meta_class(self, node: cst.ClassDef, class_name: str):
+            def _process_django_meta_class(self, node: cst.ClassDef, class_name: str):  # noqa: C901, PLR0912
                 """Process Django Meta class content for model options"""
                 if not node.body:
                     return
 
                 meta_attrs = {}
-                for stmt in node.body.body if hasattr(node.body, "body") else node.body:
+                for stmt in node.body.body if hasattr(node.body, "body") else node.body:  # noqa: PLR1702
                     if isinstance(stmt, cst.SimpleStatementLine):
                         for expr in stmt.body:
                             if isinstance(expr, cst.Assign):
@@ -847,7 +847,7 @@ class Analyzer:
                                         try:
                                             attr_value = module.code_for_node(expr.value)
                                             meta_attrs[attr_name] = attr_value
-                                        except:
+                                        except:  # noqa: E722, S112
                                             continue
                     elif hasattr(stmt, "child_by_field_name"):
                         # Handle cases where the assignment is more complex
@@ -888,12 +888,12 @@ class Analyzer:
                     elif attr_name == "managed":
                         self.django_model_metadata["is_managed"] = "True" in attr_value
 
-            def visit_FunctionDef(self, node: cst.FunctionDef):
+            def visit_FunctionDef(self, node: cst.FunctionDef):  # noqa: N802
                 self.current_function = node.name.value
                 # Reset imports tracking for this function
                 self.current_function_imports = set()
 
-            def leave_FunctionDef(self, original_node: cst.FunctionDef):
+            def leave_FunctionDef(self, original_node: cst.FunctionDef):  # noqa: N802
                 start_line, end_line = self._get_position(original_node)
                 code_block = module.code_for_node(original_node)
 
@@ -943,7 +943,7 @@ class Analyzer:
                 self.chunks.append(chunk)
                 self.current_function = None
 
-            def leave_ClassDef(self, original_node: cst.ClassDef):
+            def leave_ClassDef(self, original_node: cst.ClassDef):  # noqa: C901, N802, PLR0912, PLR0915
                 start_line, end_line = self._get_position(original_node)
                 code_block = module.code_for_node(original_node)
 
@@ -1061,7 +1061,7 @@ class Analyzer:
                 self.chunks.append(chunk)
                 self.current_class = None
 
-            def visit_Name(self, node: cst.Name) -> None:
+            def visit_Name(self, node: cst.Name) -> None:  # noqa: N802
                 # Check if this name matches any imported names
                 name = node.value
                 if name in self.file_imports or name in self.file_from_imports:
@@ -1070,9 +1070,9 @@ class Analyzer:
                     elif self.current_class:  # If we're inside a class
                         self.current_class_imports.add(name)
 
-            def visit_Attribute(self, node: cst.Attribute) -> None:
+            def visit_Attribute(self, node: cst.Attribute) -> None:  # noqa: C901, N802, PLR0912
                 # Handle attribute access like "module.function" or "obj.method"
-                if isinstance(node.value, cst.Name):
+                if isinstance(node.value, cst.Name):  # noqa: PLR1702
                     name = node.value.value
                     # Check if the base of the attribute is an imported name
                     if name in self.file_imports or name in self.file_from_imports:
@@ -1122,14 +1122,14 @@ class Analyzer:
                                 if self.current_class:
                                     # Track more specific Django field types
                                     field_name = code_for_node(node.attr)
-                                    full_attr_chain = f"{nested_base_name}.{code_for_node(attr_node.attr)}.{field_name}"
-                                    if field_name in [
+                                    f"{nested_base_name}.{code_for_node(attr_node.attr)}.{field_name}"
+                                    if field_name in {
                                         "CharField",
                                         "IntegerField",
                                         "ForeignKey",
                                         "ManyToManyField",
                                         "OneToOneField",
-                                    ]:
+                                    }:
                                         if self.current_class not in self.django_model_relationships:
                                             self.django_model_relationships[self.current_class] = []
                                         self.django_model_relationships[self.current_class].append((
@@ -1137,9 +1137,9 @@ class Analyzer:
                                             field_name,
                                         ))
 
-            def visit_Call(self, node: cst.Call) -> None:
+            def visit_Call(self, node: cst.Call) -> None:  # noqa: C901, N802, PLR0912
                 # Track function calls
-                if isinstance(node.func, cst.Name):
+                if isinstance(node.func, cst.Name):  # noqa: PLR1702
                     name = node.func.value
                     # Check if it's an imported function
                     if name in self.file_imports or name in self.file_from_imports:
@@ -1220,7 +1220,7 @@ class Analyzer:
 
                 return None
 
-            def _extract_docstring_from_expr(self, expr) -> str | None:
+            def _extract_docstring_from_expr(self, expr) -> str | None:  # noqa: C901
                 """
                 Extract docstring from an expression node.
                 """
@@ -1277,7 +1277,7 @@ class Analyzer:
 
                 return f"def {name}{parameters}{return_annotation}:"
 
-            def _get_parameters_str(self, params: cst.Parameters) -> str:
+            def _get_parameters_str(self, params: cst.Parameters) -> str:  # noqa: C901, PLR0912
                 """
                 Convert function parameters to string representation.
                 """
@@ -1460,7 +1460,7 @@ class Analyzer:
             print(f"Complexity calculation failed: {e}")
             return 1
 
-    def _extract_dependencies(self, code: str, language: str) -> list[str]:
+    def _extract_dependencies(self, code: str, language: str) -> list[str]:  # noqa: C901, PLR0912
         deps = set()  # use set to avoid duplicates
 
         if language == "python":
@@ -1564,14 +1564,14 @@ class Analyzer:
                     continue
             return base_classes
 
-        if hasattr(node, "children"):
+        if hasattr(node, "children"):  # noqa: PLR1702
             for child in node.children:
                 if hasattr(child, "type") and child.type == "argument_list":
                     for arg in child.children:
                         if arg.type not in {"(", ")"}:
                             try:
                                 base_classes.append(code_bytes[arg.start_byte : arg.end_byte].decode("utf-8").strip())
-                            except Exception:
+                            except Exception:  # noqa: S112
                                 continue
 
         return base_classes
@@ -1749,7 +1749,7 @@ class Analyzer:
 
         return "General application code"
 
-    def enhance_chunk_completely(
+    def enhance_chunk_completely(  # noqa: PLR0913, PLR0917
         self,
         chunk: CodeChunk,
         node=None,

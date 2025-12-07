@@ -3,7 +3,6 @@ LLM configuration with connectivity check
 """
 
 import requests
-from pydantic import ConfigDict
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -29,8 +28,6 @@ class LLMConfig(BaseSettings):
     )
     timeout: int = Field(default=60, description="Timeout in seconds for LLM requests")
     max_retries: int = Field(default=3, description="Number of retries for failed requests")
-
-    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
     def ping(self) -> bool:
         """

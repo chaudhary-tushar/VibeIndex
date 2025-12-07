@@ -3,11 +3,12 @@ Embedding configuration with connectivity check
 """
 
 import requests
-from pydantic import ConfigDict
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
-BAD_REQUEST = 400  # 400 means it's reaching the service but has invalid parameters
+from .settings import settings
+
+BAD_REQUEST = 400
 
 
 class EmbeddingConfig(BaseSettings):
@@ -15,13 +16,18 @@ class EmbeddingConfig(BaseSettings):
     Configuration for embedding generation services
     """
 
-    model_url: str = Field(..., description="API endpoint for embedding model (Ollama/Docker)")
-    model_name: str = Field(..., description="Name of the embedding model")
-    embedding_dim: int = Field(..., description="Dimensionality of the embedding vectors")
+    model_url: str = Field(
+        default_factory=lambda: settings.embedding_model_url, description="URL of the Embedding model"
+    )
+    model_name: str = Field(
+        default_factory=lambda: settings.embedding_model_name, description="Name of Embedding model"
+    )
+    embedding_dim: int = Field(
+        default_factory=lambda: settings.embedding_dim, description="Dimension of the Embedding Model"
+    )
     timeout: int = Field(default=30, description="Timeout in seconds for embedding requests")
     max_retries: int = Field(default=3, description="Number of retries for failed requests")
-
-    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
+    batch_size: int = Field(default=8, description="Size of Batch to process embedding at once")
 
     def ping(self) -> bool:
         """

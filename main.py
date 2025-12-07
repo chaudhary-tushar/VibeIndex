@@ -1,4 +1,3 @@
-# ruff: noqa: BLE001
 import asyncio
 import json
 import os
@@ -457,7 +456,7 @@ def preprocess(project, verbose):
 @cli.command()
 @click.option("--project", "-p", required=True, help="Input JSON file with chunks")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def embed(project, output, model_url, model_name, verbose):
+def embed(project, verbose):
     """
     Generate embeddings for code chunks.
     """
@@ -466,7 +465,7 @@ def embed(project, output, model_url, model_name, verbose):
     processed_chunks = settings.get_preprocessed_chunks_path()
     output = settings.get_embedded_chunks_path()
 
-    click.echo(f"Model: {model_name} @ {model_url}")
+    click.echo(f"Model: {settings.embedding_model_name} @ {settings.embedding_model_url}")
 
     try:
         # Load chunks
@@ -475,9 +474,7 @@ def embed(project, output, model_url, model_name, verbose):
 
         chunks = data.get("chunks", data)
 
-        # Generate embeddings
-        config = EmbeddingConfig(model_url=model_url, model_name=model_name)
-        embedder = EmbeddingGenerator(config)
+        embedder = EmbeddingGenerator()
         embedded_chunks = embedder.generate_all(chunks)
 
         if verbose:
@@ -587,7 +584,7 @@ def enrich(project):
     settings.initialize_project(project)
     processed_chunks = settings.get_preprocessed_chunks_path()
     symbol_index = settings.get_symbol_index_path()
-    output = settings.get_embedded_chunks_path()
+    output = settings.get_enriched_chunks_path()
 
     try:
         # Load chunks
