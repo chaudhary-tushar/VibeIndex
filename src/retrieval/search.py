@@ -28,14 +28,17 @@ from src.config import QdrantConfig
 from src.embedding.embedder import EmbeddingGenerator
 
 console = Console()
+SMALL_COLLECTION = 100
+MEDIUM_COLLECTION = 1000
+BATCH_LIMIT = 10
 
 
 class QdrantIndexer:
     """Enhanced Qdrant vector database integration with advanced collection management"""
 
-    def __init__(self, config: QdrantConfig):
-        self.config = config
-        self.client = QdrantClient(host=config.host, port=config.port)
+    def __init__(self):
+        self.config = QdrantConfig()
+        self.client = QdrantClient(host=self.config.host, port=self.config.port)
         self.collections = {}
         self.stats = {
             "collections_created": 0,
@@ -49,10 +52,11 @@ class QdrantIndexer:
         try:
             # Test basic connectivity
             self.client.get_collections()
-            return True
         except Exception as e:
             console.print(f"[red]Qdrant health check failed: {e}[/red]")
             return False
+        else:
+            return True
 
     def create_collections(self, embedding_dim: int):
         """Create optimized Qdrant collections for different chunk types with enhanced management"""
@@ -191,13 +195,13 @@ class QdrantIndexer:
             current_size = collection_info.vectors_count
 
             # Adaptive batch sizing based on collection size
-            if current_size < 1000:
+            if current_size < SMALL_COLLECTION:
                 return 50  # Small collections, smaller batches
-            if current_size < 10000:
+            if current_size < MEDIUM_COLLECTION:
                 return 100  # Medium collections
-            return 200  # Large collections, larger batches
-        except:
+        except Exception:
             return 100  # Default batch size
+        return 200
 
     def index_chunks(self, chunks: list[dict], batch_size: int | None = None):  # noqa: C901
         """Index chunks in Qdrant with enhanced error handling and progress tracking"""
@@ -255,7 +259,7 @@ class QdrantIndexer:
                     self.stats["indexing_errors"] += 1
                     console.print(f"[red]Failed to upload batch to {collection_name}: {e}[/red]")
                     # Try smaller batch size
-                    if batch_size > 10:
+                    if batch_size > BATCH_LIMIT:
                         console.print(f"[yellow]Retrying with smaller batch size...[/yellow]")
                         batch_size = max(10, batch_size // 2)
 
@@ -385,12 +389,12 @@ class QdrantIndexer:
 
 
 # Preserve original QdrantIndexer with "_2" suffix for backward compatibility
-class QdrantIndexer_2:
+class QdrantIndexer_2:  # noqa: N801
     """Original QdrantIndexer implementation (preserved for compatibility)"""
 
-    def __init__(self, config: QdrantConfig):
-        self.config = config
-        self.client = QdrantClient(host=config.host, port=config.port)
+    def __init__(self):
+        self.config = QdrantConfig()
+        self.client = QdrantClient(host=self.config.host, port=self.config.port)
         self.collections = {}
 
     def create_collections(self, embedding_dim: int):
@@ -407,7 +411,7 @@ class QdrantIndexer_2:
                 # Check if collection exists
                 self.client.get_collection(collection_name)
                 console.print(f"[yellow]Collection '{collection_name}' already exists[/yellow]")
-            except:
+            except Exception:
                 # Create collection
                 self.client.create_collection(
                     collection_name=collection_name,

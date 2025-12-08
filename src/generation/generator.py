@@ -59,22 +59,19 @@ class LLMClient:
         if not prompts:
             return []
 
-        results = []
         chain = ChatPromptTemplate.from_messages([("user", "{input}")]) | self.llm | StrOutputParser()
-
-        for prompt in prompts:
-            try:
-                result = await chain.ainvoke({"input": prompt})
-                results.append(result.strip())
-            except httpx.TimeoutException as e:  # Catch timeout specifically
-                print(f"⚠️ Timeout during generation for prompt '{prompt[:50]}...': {e}")
-                results.append("Context generation failed due to timeout.")
-            except httpx.RequestError as e:  # Catch other network errors
-                print(f"⚠️ Network error during generation for prompt '{prompt[:50]}...': {e}")
-                results.append("Context generation failed due to network error.")
-            except Exception as e:
-                print(f"⚠️ Unexpected error during generation for prompt '{prompt[:50]}...': {e}")
-                results.append("Context generation failed.")
+        results = []
+        try:
+            results = await chain.abatch(prompts)
+        except httpx.TimeoutException as e:  # Catch timeout specifically
+            print(f"⚠️ Batch generation failed: {e}")
+            return ["Context generation failed." for _ in prompts]
+        except httpx.RequestError as e:  # Catch other network errors
+            print(f"⚠️ Batch generation failed: {e}")
+            return ["Context generation failed." for _ in prompts]
+        except Exception as e:
+            print(f"⚠️ Batch generation failed: {e}")
+            return ["Context generation failed." for _ in prompts]
         return results
 
     def generate(self, prompt: str) -> str:

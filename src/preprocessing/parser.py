@@ -107,7 +107,7 @@ class CodeParser:
         """Parse file content using Tree-sitter"""
         try:
             tree = parser.parse(code_bytes)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             console.print(f"[red]Error parsing {file_path}: {e}[/red]")
             return []
 

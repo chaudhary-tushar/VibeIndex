@@ -2,11 +2,12 @@
 Qdrant configuration with connectivity check
 """
 
-from pydantic import ConfigDict
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance
+
+from .settings import settings
 
 
 class QdrantConfig(BaseSettings):
@@ -14,10 +15,14 @@ class QdrantConfig(BaseSettings):
     Configuration for Qdrant vector database
     """
 
-    host: str = Field(..., description="Qdrant server host")
-    port: int = Field(..., description="Qdrant server port")
-    qdrant_api_key: str = Field(default="", description="API key for Qdrant Cloud (optional)")
-    collection_prefix: str = Field(default="tipsy", description="Prefix for collection names")
+    host: str = Field(default_factory=lambda: settings.qdrant_host, description="Qdrant server host")
+    port: int = Field(default_factory=lambda: settings.qdrant_port, description="Qdrant server port")
+    qdrant_api_key: str = Field(
+        default_factory=lambda: settings.qdrant_api_key, description="API key for Qdrant Cloud (optional)"
+    )
+    collection_prefix: str = Field(
+        default_factory=lambda: settings.project_name, description="Prefix for collection names"
+    )
 
     # Vector configuration
     distance_metric: Distance = Field(default=Distance.COSINE, description="Distance metric for vector similarity")
@@ -32,8 +37,6 @@ class QdrantConfig(BaseSettings):
     # Memory and performance settings
     on_disk_vectors: bool = Field(default=False, description="Store vectors on disk instead of memory")
     on_disk_sparse_vectors: bool = Field(default=False, description="Store sparse vectors on disk")
-
-    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
     def get_collection_names(self) -> list:
         """Get list of all collection names based on prefix"""
@@ -61,7 +64,7 @@ class QdrantConfig(BaseSettings):
         try:
             # Try to get the cluster info to verify connection
             client.get_collections()
-        except Exception:  # noqa: BLE001 - Qdrant client can raise multiple exceptions
+        except Exception:
             return False
         else:
             return True

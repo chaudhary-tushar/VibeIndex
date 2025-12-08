@@ -52,7 +52,7 @@ class Analyzer:
                         language=language,
                         start_line=node.start_point[0] + 1,
                         end_line=node.end_point[0] + 1,
-                        docstring=None,  # JS doesn't have standard docstrings like Python
+                        docstring=self._extract_docstring(node, code_bytes),
                         signature=code.split("\n")[0],
                         complexity=self._calculate_complexity(code, language),
                         dependencies=self._extract_dependencies(code, language),
@@ -101,7 +101,7 @@ class Analyzer:
                         language=language,
                         start_line=node.start_point[0] + 1,
                         end_line=node.end_point[0] + 1,
-                        docstring=None,
+                        docstring=self._extract_docstring(node, code_bytes),
                         complexity=self._calculate_complexity(code, language),
                         dependencies=self._extract_dependencies(code, language),
                         defines=[name],
@@ -137,7 +137,7 @@ class Analyzer:
                         language=language,
                         start_line=node.start_point[0] + 1,
                         end_line=node.end_point[0] + 1,
-                        docstring=None,
+                        docstring=self._extract_docstring(node, code_bytes),
                         signature=code.split("\n")[0],
                         complexity=self._calculate_complexity(code, language),
                         dependencies=self._extract_dependencies(code, language),
@@ -169,7 +169,7 @@ class Analyzer:
                                         language=language,
                                         start_line=value_node.start_point[0] + 1,
                                         end_line=value_node.end_point[0] + 1,
-                                        docstring=None,
+                                        docstring=self._extract_docstring(node, code_bytes),
                                         signature=f"const {name} = ...",
                                         complexity=self._calculate_complexity(code, language),
                                         dependencies=self._extract_dependencies(code, language),
@@ -190,7 +190,7 @@ class Analyzer:
                     language=language,
                     start_line=node.start_point[0] + 1,
                     end_line=node.end_point[0] + 1,
-                    docstring=None,
+                    docstring=self._extract_docstring(node, code_bytes),
                     signature=code.split("\n")[0],
                     complexity=0,  # Imports don't add complexity
                     dependencies=[],
@@ -211,7 +211,7 @@ class Analyzer:
                     language=language,
                     start_line=node.start_point[0] + 1,
                     end_line=node.end_point[0] + 1,
-                    docstring=None,
+                    docstring=self._extract_docstring(node, code_bytes),
                     signature=code.split("\n")[0],
                     complexity=0,
                     dependencies=[],
@@ -1505,6 +1505,18 @@ class Analyzer:
                     deps.add(match.split("/")[0])
 
         return sorted(deps)[:10]  # return list, deduped
+
+    def _extract_docstring(self, node, code_bytes: bytes) -> str | None:
+        """Extract docstring from node"""
+        if node.type in {"function_definition", "class_definition"}:
+            body = node.child_by_field_name("body")
+            if body and body.children:
+                first_child = body.children[0]
+                if first_child.type == "expression_statement":
+                    expr = first_child.children[0]
+                    if expr.type == "string":
+                        return code_bytes[expr.start_byte : expr.end_byte].decode("utf-8").strip("\"' ")
+        return None
 
     # ============================================================================
     # ENHANCED METADATA EXTRACTION METHODS (Migrated from enhanced.py)

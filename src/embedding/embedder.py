@@ -74,7 +74,7 @@ class EmbeddingGenerator:
         """Generate embedding using Ollama API with enhanced error handling"""
         url = f"{self.config.model_url}/embeddings"
 
-        payload = {"model": self.config.model_name, "input": text}
+        payload = {"model": self.config.model_name, "input": text, "encoding_format": "float"}
 
         for attempt in range(self.config.max_retries):
             try:

@@ -27,7 +27,7 @@ class EmbeddingConfig(BaseSettings):
     )
     timeout: int = Field(default=30, description="Timeout in seconds for embedding requests")
     max_retries: int = Field(default=3, description="Number of retries for failed requests")
-    batch_size: int = Field(default=8, description="Size of Batch to process embedding at once")
+    batch_size: int = Field(default=16, description="Size of Batch to process embedding at once")
 
     def ping(self) -> bool:
         """
