@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.progress import track
 
 from src.config import EmbeddingConfig
 from src.config import QdrantConfig
@@ -30,6 +31,7 @@ from src.retrieval import CodeRAG_2
 from src.retrieval.hybrid_search import setup_hybrid_collection
 from src.retrieval.search import QdrantIndexer
 from src.retrieval.search import index_from_embedded_json
+from src.embedding.quality_validator import validate_embedding_chunk
 
 console = Console()
 app = FastAPI(title="RAG Code Parser API", description="API for parsing code into chunks for RAG indexing")
@@ -467,6 +469,7 @@ def embed(project, verbose):
     output = settings.get_embedded_chunks_path()
 
     click.echo(f"Model: {settings.embedding_model_name} @ {settings.embedding_model_url}")
+    click.echo(f"Quality validation: {'enabled' if settings.quality_validation_enabled else 'disabled'}")
 
     try:
         # Load chunks
@@ -481,6 +484,9 @@ def embed(project, verbose):
         if verbose:
             click.echo(f"Embedded {len(embedded_chunks)} chunks")
             click.echo(f"Success: {embedder.stats['success']}, Failed: {embedder.stats['failed']}")
+            click.echo(
+                f"Quality checks passed: {embedder.stats['quality_checks_passed']}, Failed: {embedder.stats['quality_checks_failed']}"
+            )
 
         # Save results
         if output:
@@ -507,31 +513,54 @@ def embed(project, verbose):
 
 
 @cli.command()
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
+def validate_embeddings(project):
+    """
+    Validate embeddings for code chunks.
+    """
+    click.echo(f"Validating Generated embeddings for chunks for project : {project}")
+    settings.initialize_project(project)
+    embedding_chunks = settings.get_embedded_chunks_path()
+    output = settings.get_validation_report()
+
+    with Path(embedding_chunks).open(encoding="utf-8") as f:
+        data = json.load(f)
+    chunks = data.get("chunks", data)[:10]
+    for chunk in track(chunks, description="Validating embeddings..."):
+        validation_report = validate_embedding_chunk(chunk.get("embedding"), chunk)
+        # Store validation results in the chunk
+        chunk["embedding"] = []
+        chunk["quality_validation"] = validation_report
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    with Path(output).open("w", encoding="utf-8") as of:
+        json.dump(chunks, of, indent=2, ensure_ascii=False)
+
+
+@cli.command()
 @click.option("--project", "-p", required=True, help="Input JSON file with embedded chunks")
-@click.option("--host", default="localhost", help="Qdrant host")
-@click.option("--port", default=6333, type=int, help="Qdrant port")
-@click.option("--collection-prefix", default="tipsy", help="Collection prefix")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
 def index(project, host, port, collection_prefix, verbose):
     """
     Index embedded chunks in Qdrant vector database.
     """
-    click.echo(f"Indexing chunks from: {input}")
-    click.echo(f"Qdrant: {host}:{port}, Prefix: {collection_prefix}")
+    settings.initialize_project(project)
+    embedding_chunks = settings.get_embedded_chunks_path()
+    output = settings.get_validation_report()
+    click.echo(f"Indexing chunks from: {embedding_chunks}")
+    click.echo(f"Qdrant: {settings.qdrant_host}:{settings.qdrant_port}, Prefix: {settings.project_name}")
 
     try:
         # Load chunks
-        with Path(input).open(encoding="utf-8") as f:
+        with Path(embedding_chunks).open(encoding="utf-8") as f:
             data = json.load(f)
 
         chunks = data.get("chunks", data)
 
         # Index in Qdrant
-        qdrant_config = QdrantConfig(host=host, port=port, collection_prefix=collection_prefix)
-        indexer = QdrantIndexer(qdrant_config)
+        indexer = QdrantIndexer()
 
         # Create collections (assuming 768-dim embeddings, adjust as needed)
-        indexer.create_collections(embedding_dim=768)
+        indexer.create_collections()
 
         # Index chunks
         indexer.index_chunks(chunks)

@@ -19,6 +19,7 @@ from rich.progress import TimeElapsedColumn
 
 # Import consolidated configuration for backward compatibility
 from src.config import EmbeddingConfig
+from src.embedding.quality_validator import EmbeddingQualityValidator
 
 console = Console()
 
@@ -34,6 +35,32 @@ class EmbeddingGenerator:
 
     def __init__(self):
         self.config = EmbeddingConfig()
+        # Initialize the EmbeddingQualityValidator with configuration from EmbeddingConfig
+        # Only initialize if quality validation is enabled
+        self.quality_validator = None
+        if self.config.quality_validation_enabled:
+            quality_config = {
+                "expected_dimension": self.config.expected_embedding_dimension,
+                "domain": self.config.validation_domain,
+                "latency_threshold_ms": self.config.latency_threshold_ms,
+                "quality_thresholds": {
+                    "overall_score": self.config.quality_threshold_overall,
+                    "dimensionality_score": self.config.quality_threshold_dimensionality,
+                    "semantic_score": self.config.quality_threshold_semantic,
+                    "distribution_score": self.config.quality_threshold_distribution,
+                    "domain_score": self.config.quality_threshold_domain,
+                    "performance_score": self.config.quality_threshold_performance,
+                },
+                "validator_weights": {
+                    "dimensionality": self.config.validator_weights_dimensionality,
+                    "semantic": self.config.validator_weights_semantic,
+                    "distribution": self.config.validator_weights_distribution,
+                    "domain": self.config.validator_weights_domain,
+                    "performance": self.config.validator_weights_performance,
+                },
+            }
+            self.quality_validator = EmbeddingQualityValidator(quality_config)
+
         self.stats = {
             "success": 0,
             "failed": 0,
@@ -84,7 +111,7 @@ class EmbeddingGenerator:
                     result = response.json()
                     embedding = result.get("data")[0].get("embedding")
 
-                    # Validate embedding quality
+                    # First perform basic validation
                     is_valid, message = self.validate_embedding_quality(embedding)
                     if is_valid:
                         return embedding
@@ -126,9 +153,15 @@ class EmbeddingGenerator:
             embedding = self.generate_embedding_ollama(text)
 
             if embedding:
-                # Additional quality validation
-                is_valid, message = self.validate_embedding_quality(embedding)
-                if is_valid:
+                validation_report = self.quality_validator.validate_embedding(
+                    np.array(embedding, dtype=np.float32), chunk
+                )
+
+                # Store validation results in the chunk
+                chunk["quality_validation"] = validation_report
+
+                # Check if the embedding passed quality validation
+                if validation_report["passed"]:
                     chunk["embedding"] = embedding
                     chunk["embedding_model"] = self.config.model_name
                     chunk["embedding_timestamp"] = time.time()
@@ -136,12 +169,23 @@ class EmbeddingGenerator:
                     embedded_chunks.append(chunk)
                     self.stats["success"] += 1
                     self.stats["quality_checks_passed"] += 1
+
+                    # Log validation results if verbose
+                    console.print(
+                        f"[green]✓ Quality validation passed for: {chunk.get('qualified_name') or chunk.get('name')} (Score: {validation_report['overall_score']:.3f})[/green]"
+                    )
                 else:
+                    # Handle failed validation
                     self.stats["failed"] += 1
                     self.stats["quality_checks_failed"] += 1
                     console.print(
-                        f"[red]Quality validation failed for: {chunk['qualified_name'] or chunk['name']} - {message}[/red]"
+                        f"[red]Quality validation failed for: {chunk.get('qualified_name') or chunk.get('name')}[/red]"
                     )
+                    console.print(
+                        f"[red]  - Score: {validation_report['overall_score']:.3f} (Threshold: {self.config.quality_threshold_overall})[/red]"
+                    )
+                    console.print(f"[red]  - Reasons: {validation_report['rejection_reasons']}[/red]")
+                    console.print(f"[red]  - Recommendations: {validation_report['recommendations']}[/red]")
             else:
                 self.stats["failed"] += 1
                 console.print(f"[red]Failed to embed: {chunk['qualified_name'] or chunk['name']}[/red]")

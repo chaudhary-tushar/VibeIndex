@@ -67,6 +67,23 @@ class Settings(BaseSettings):
     embedding_model_name: str
     embedding_dim: int
 
+    # Embedding Quality Validation Configuration
+    quality_validation_enabled: bool = True
+    quality_threshold_overall: float = 0.85
+    quality_threshold_dimensionality: float = 0.9
+    quality_threshold_semantic: float = 0.7
+    quality_threshold_distribution: float = 0.8
+    quality_threshold_domain: float = 0.7
+    quality_threshold_performance: float = 0.9
+    validator_weights_dimensionality: float = 0.2
+    validator_weights_semantic: float = 0.3
+    validator_weights_distribution: float = 0.2
+    validator_weights_domain: float = 0.15
+    validator_weights_performance: float = 0.15
+    expected_embedding_dimension: int = 2560
+    validation_domain: str = "code"
+    latency_threshold_ms: int = 1000
+
     # LLM Generation Configuration
     generation_model_url: str
     generation_model_name: str
@@ -173,6 +190,14 @@ class Settings(BaseSettings):
         if self.project_data_dir is None:
             raise ProjectError
         return self.project_data_dir / "embedded_chunks.json"
+
+    def get_validation_report(self) -> Path:
+        """
+        Get the path to the validation_report.json file for the current project
+        """
+        if self.project_data_dir is None:
+            raise ProjectError
+        return self.project_data_dir / "validation_report.json"
 
     def get_preprocessed_chunks_path(self) -> Path:
         """

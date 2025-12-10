@@ -29,6 +29,56 @@ class EmbeddingConfig(BaseSettings):
     max_retries: int = Field(default=3, description="Number of retries for failed requests")
     batch_size: int = Field(default=16, description="Size of Batch to process embedding at once")
 
+    # Quality validation settings
+    quality_validation_enabled: bool = Field(
+        default_factory=lambda: settings.quality_validation_enabled,
+        description="Enable quality validation for embeddings",
+    )
+    quality_threshold_overall: float = Field(
+        default_factory=lambda: settings.quality_threshold_overall, description="Minimum overall quality score"
+    )
+    quality_threshold_dimensionality: float = Field(
+        default_factory=lambda: settings.quality_threshold_dimensionality, description="Minimum dimensionality score"
+    )
+    quality_threshold_semantic: float = Field(
+        default_factory=lambda: settings.quality_threshold_semantic, description="Minimum semantic score"
+    )
+    quality_threshold_distribution: float = Field(
+        default_factory=lambda: settings.quality_threshold_distribution, description="Minimum distribution score"
+    )
+    quality_threshold_domain: float = Field(
+        default_factory=lambda: settings.quality_threshold_domain, description="Minimum domain score"
+    )
+    quality_threshold_performance: float = Field(
+        default_factory=lambda: settings.quality_threshold_performance, description="Minimum performance score"
+    )
+    validator_weights_dimensionality: float = Field(
+        default_factory=lambda: settings.validator_weights_dimensionality,
+        description="Weight for dimensionality validator",
+    )
+    validator_weights_semantic: float = Field(
+        default_factory=lambda: settings.validator_weights_semantic, description="Weight for semantic validator"
+    )
+    validator_weights_distribution: float = Field(
+        default_factory=lambda: settings.validator_weights_distribution, description="Weight for distribution validator"
+    )
+    validator_weights_domain: float = Field(
+        default_factory=lambda: settings.validator_weights_domain, description="Weight for domain validator"
+    )
+    validator_weights_performance: float = Field(
+        default_factory=lambda: settings.validator_weights_performance, description="Weight for performance validator"
+    )
+    expected_embedding_dimension: int = Field(
+        default_factory=lambda: settings.expected_embedding_dimension, description="Expected dimension of embeddings"
+    )
+    validation_domain: str = Field(
+        default_factory=lambda: settings.validation_domain, description="Domain of content being validated"
+    )
+    latency_threshold_ms: int = Field(
+        default_factory=lambda: settings.latency_threshold_ms,
+        description="Maximum acceptable embedding generation time in milliseconds",
+    )
+
     def ping(self) -> bool:
         """
         Check if the embedding service is reachable by sending a test embedding request

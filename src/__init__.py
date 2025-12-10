@@ -15,7 +15,6 @@ from .preprocessing import CodeChunk
 
 # Enhanced retrieval components (Phase 2)
 from .retrieval import QdrantIndexer
-from .retrieval import QdrantIndexer_2
 
 __all__ = [
     "ChunkPreprocessor",
@@ -28,5 +27,4 @@ __all__ = [
     "QdrantConfig",
     # Retrieval
     "QdrantIndexer",
-    "QdrantIndexer_2",
 ]
