@@ -31,7 +31,7 @@ from rich.progress import TaskProgressColumn
 from rich.progress import TextColumn
 from rich.table import Table
 
-from src.embedding.embedder import EmbeddingConfig
+from src.config.embedding_config import EmbeddingConfig
 from src.embedding.embedder import EmbeddingGenerator
 
 console = Console()
