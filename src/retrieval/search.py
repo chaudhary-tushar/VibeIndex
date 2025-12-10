@@ -240,8 +240,9 @@ class QdrantIndexer:
                     console.print(f"[yellow]Skipping chunk without embedding: {chunk.get('name', 'unknown')}[/yellow]")
                     continue
 
+                # Use chunk ID as string (UUID) - Qdrant supports both int and UUID string IDs
                 point = PointStruct(
-                    id=int(chunk["id"], 16),  # Use chunk ID
+                    id=chunk["id"],  # Use chunk ID as string (UUID)
                     vector=chunk["embedding"],
                     payload=self._prepare_payload(chunk),
                 )

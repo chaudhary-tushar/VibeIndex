@@ -31,8 +31,8 @@ from rich.progress import TaskProgressColumn
 from rich.progress import TextColumn
 from rich.table import Table
 
-from ..embedding.embedder import EmbeddingConfig
-from ..embedding.embedder import EmbeddingGenerator
+from src.embedding.embedder import EmbeddingConfig
+from src.embedding.embedder import EmbeddingGenerator
 
 console = Console()
 
@@ -77,8 +77,7 @@ class BM25SparseEncoder:
         """Simple tokenization"""
         # Convert to lowercase, split on non-alphanumeric
         text = text.lower()
-        tokens = re.findall(r"\b\w+\b", text)
-        return tokens
+        return re.findall(r"\b\w+\b", text)
 
     def build_vocab_from_collection(self, client: QdrantClient, collection_name: str):
         """Build vocabulary and IDF from existing collection"""
@@ -112,8 +111,6 @@ class BM25SparseEncoder:
 
                 points, next_offset = result
 
-                # progress.console.print(f"{len(points), offset}", end="*")
-                # sys.exit()
                 if not points:
                     print("here", end="*")
                     break
@@ -153,7 +150,6 @@ class BM25SparseEncoder:
 
                 for term, df in term_doc_freq.items():
                     self.vocab[term] = len(self.vocab)
-                    # IDF = log((N - df + 0.5) / (df + 0.5) + 1)
                     self.idf[term] = np.log((doc_count - df + 0.5) / (df + 0.5) + 1.0)
                     progress.update(idf_task, advance=1)
 
@@ -273,7 +269,7 @@ class HybridSearchEngine:
 
                 # Create point with both dense and sparse vectors
                 point = PointStruct(
-                    id=int(chunk["id"], 16),
+                    id=chunk["id"],  # Use chunk ID as string (UUID)
                     vector={
                         "text-dense": chunk["embedding"],  # Existing dense vector
                         "text-sparse": sparse_vector,
@@ -295,7 +291,7 @@ class HybridSearchEngine:
         return payload
 
     def hybrid_search(
-        self, collection_name: str, query_text: str, filters: Filter | None = None, limit: int = None
+        self, collection_name: str, query_text: str, filters: Filter | None = None, limit: int | None = None
     ) -> list[dict]:
         """
         Perform hybrid search (dense + sparse vectors)
@@ -324,12 +320,12 @@ class HybridSearchEngine:
                 limit=limit,
             )
 
-            return results.points
-
         except Exception as e:
             console.print(f"[yellow]Hybrid search not available, falling back to dense-only: {e}[/yellow]")
             # Fallback to dense-only search
             return self._dense_search_fallback(collection_name, query_embedding, filters, limit)
+        else:
+            return results.points
 
     def _dense_search_fallback(
         self, collection_name: str, query_vector: list[float], filters: Filter | None, limit: int
@@ -410,7 +406,7 @@ class HybridSearchEngine:
                 if result.id not in dense_ids:
                     console.print(f"  + {result.payload.get('qualified_name', result.payload.get('name'))}")
 
-    def advanced_filtered_search(
+    def advanced_filtered_search(  # noqa: PLR0913, PLR0917
         self,
         collection_name: str,
         query: str,
@@ -456,7 +452,7 @@ def setup_hybrid_collection(collection_name: str, chunks_path: str):
     # Load chunks
     import json
 
-    with pathlib.Path(chunks_path).open("r") as f:
+    with pathlib.Path(chunks_path).open("r", encoding="utf-8") as f:
         data = json.load(f)
         chunks = data.get("chunks", [])
 
@@ -501,9 +497,8 @@ def main():
     # Load chunks
     import json
 
-    # chunks_file = input("Enter path to embedded chunks JSON: ").strip()
     chunks_file = "parsed_chunks_tipsy_2_embedded.json"
-    with pathlib.Path(chunks_file).open("r") as f:
+    with pathlib.Path(chunks_file).open("r", encoding="utf-8") as f:
         data = json.load(f)
         chunks = data.get("chunks", [])
 

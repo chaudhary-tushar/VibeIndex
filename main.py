@@ -539,7 +539,7 @@ def validate_embeddings(project):
 @cli.command()
 @click.option("--project", "-p", required=True, help="Input JSON file with embedded chunks")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def index(project, host, port, collection_prefix, verbose):
+def index(project, verbose):
     """
     Index embedded chunks in Qdrant vector database.
     """
