@@ -14,6 +14,7 @@ The project follows a modular design with the following main components:
 - **Embedding Layer**: Converts parsed content into vector embeddings using transformer models
 - **Retrieval Layer**: Provides a FastAPI-based API for semantic search against the vector database
 - **Storage**: Uses Qdrant as a vector database for storing embeddings and enabling similarity search
+- **Configuration Layer**: Centralized configuration management for all external services with connectivity checks
 
 ## Key Technologies
 
@@ -32,6 +33,10 @@ The project follows a modular design with the following main components:
 geminIndex/
 ├── config/                 # Configuration and settings
 │   ├── settings.py         # Pydantic settings model
+│   ├── embedding_config.py # Embedding service configuration
+│   ├── qdrant_config.py    # Qdrant service configuration
+│   ├── llm_config.py       # LLM service configuration
+│   ├── neo4j_config.py     # Neo4j service configuration
 ├── scripts/                # Script files
 │   └── ingest.py           # Data ingestion pipeline
 ├── src/                    # Main source code
@@ -70,12 +75,17 @@ geminIndex/
 2. **Set up environment variables**:
    Create a `.env` file based on the expected variables in `config/settings.py`:
    ```
+   EMBEDDING_MODEL_URL=http://localhost:12434/v1
+   EMBEDDING_MODEL_NAME=ai/embeddinggemma
+   EMBEDDING_DIM=768
+   GENERATION_MODEL_URL=http://localhost:12434/v1
+   GENERATION_MODEL_NAME=gpt-3.5-turbo
    QDRANT_HOST=localhost
    QDRANT_PORT=6333
    QDRANT_API_KEY=your_api_key
-   EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-   EMBEDDING_DIM=384
-   GENERATION_MODEL_NAME=gpt-3.5-turbo
+   NEO4J_URI=bolt://localhost:7687
+   NEO4J_USERNAME=neo4j
+   NEO4J_PASSWORD=your_password
    ```
 
 3. **Start Qdrant (using Docker)**:
@@ -122,7 +132,7 @@ The application provides a CLI with two main commands:
 ## Development Conventions
 
 1. **Code Structure**: Follow the modular architecture with clear separation between preprocessing, embedding, and retrieval layers
-2. **Configuration**: Use Pydantic BaseSettings for configuration management
+2. **Configuration**: Use Pydantic BaseSettings for configuration management, with external services configured via .env files
 3. **Error Handling**: Implement proper error handling throughout the pipeline
 4. **Logging**: Add appropriate logging for debugging and monitoring
 5. **Documentation**: Document public APIs and complex functions
@@ -147,15 +157,29 @@ The application provides a CLI with two main commands:
 - Exposes `/retrieve` endpoint for semantic search queries
 - Supports both keyword and vector similarity search
 
+### Configuration Layer
+- **Settings**: Centralized configuration using Pydantic BaseSettings
+- **EmbeddingConfig**: Configuration for embedding services with connectivity check
+- **QdrantConfig**: Configuration for Qdrant database with connectivity check
+- **LLMConfig**: Configuration for LLM generation services with connectivity check
+- **Neo4jConfig**: Configuration for Neo4j database with connectivity check
+
+Each configuration class includes a `ping()` method to verify connectivity to the respective service before attempting to use it.
+
 ## Environment Variables
 
 The application expects the following environment variables (defined in `config/settings.py`):
+- `EMBEDDING_MODEL_URL`: API endpoint for the embedding model
+- `EMBEDDING_MODEL_NAME`: Name of the embedding model to use
+- `EMBEDDING_DIM`: Dimension of generated embeddings
+- `GENERATION_MODEL_URL`: API endpoint for the generation model
+- `GENERATION_MODEL_NAME`: Name of the generation model
 - `QDRANT_HOST`: Host for Qdrant database
 - `QDRANT_PORT`: Port for Qdrant database
 - `QDRANT_API_KEY`: API key for Qdrant (if authentication enabled)
-- `EMBEDDING_MODEL_NAME`: Name of the embedding model to use
-- `EMBEDDING_DIM`: Dimension of generated embeddings
-- `GENERATION_MODEL_NAME`: Name of the generation model (future use)
+- `NEO4J_URI`: URI for Neo4j database (e.g., bolt://localhost:7687)
+- `NEO4J_USERNAME`: Username for Neo4j database
+- `NEO4J_PASSWORD`: Password for Neo4j database
 
 ## Data Flow
 

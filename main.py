@@ -1,3 +1,4 @@
+# ruff : noqa
 import asyncio
 import json
 import os
@@ -11,12 +12,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.progress import track
 
 from src.config import EmbeddingConfig
 from src.config import QdrantConfig
 from src.config import settings
 from src.embedding.embedder import EmbeddingGenerator
-from src.generation import BatchProcessor_2
+from src.generation import BatchProcessor
 from src.generation.context_builder import ContextEnricher
 from src.generation.context_builder import get_summarized_chunks_ids
 from src.generation.context_builder import stats_check
@@ -25,10 +27,11 @@ from src.generation.context_builder import stats_check
 from src.preprocessing import parse_file
 from src.preprocessing import parse_project
 from src.preprocessing.preprocessor import ChunkPreprocessor
-from src.retrieval import CodeRAG_2
+from src.retrieval import CodeRAG
 from src.retrieval.hybrid_search import setup_hybrid_collection
 from src.retrieval.search import QdrantIndexer
 from src.retrieval.search import index_from_embedded_json
+from src.embedding.quality_validator import validate_embedding_chunk
 
 console = Console()
 app = FastAPI(title="RAG Code Parser API", description="API for parsing code into chunks for RAG indexing")
@@ -154,10 +157,7 @@ async def api_preprocess_chunks(request: dict):
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Preprocess
         preprocessor = ChunkPreprocessor()
@@ -202,10 +202,7 @@ async def api_embed_chunks(request: dict):
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Generate embeddings
         config = EmbeddingConfig(model_url=model_url, model_name=model_name)
@@ -250,11 +247,7 @@ async def api_index_chunks(request: dict):
         with Path(input_file).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Index in Qdrant
         qdrant_config = QdrantConfig(host=host, port=port, collection_prefix=collection_prefix)
@@ -291,11 +284,7 @@ async def api_enrich_chunks(request: dict):
         with Path(input_file).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         summarized_ids = set(get_summarized_chunks_ids())
         filtered_chunks = [item for item in chunks if item.get("id") not in summarized_ids]
@@ -348,7 +337,7 @@ async def api_batch_prompts(request: dict):
     try:
         if model:
             os.environ["LLM_MODEL"] = model
-        processor = BatchProcessor_2(delay=delay)
+        processor = BatchProcessor(delay=delay)
         prompts = processor.load_prompts(input_path)
         results = processor.process_prompts(prompts, output_file, output_format)
         return {"message": f"Processed {len(results)} prompts", "num_prompts": len(prompts), "output_file": output_file}
@@ -397,7 +386,7 @@ def ingest(path, verbose):
     """
     Run the data ingestion pipeline - parse code into chunks.
     """
-    settings.project_path = Path(path).resolve()
+    settings.initialize_project(path)
     click.echo(f"Running code parsing pipeline for: {path}")
 
     try:
@@ -416,25 +405,23 @@ def ingest(path, verbose):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
-@click.option("--output", "-o", help="Output file for preprocessed chunks (JSON)")
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def preprocess(input, output, verbose):
+def preprocess(project, verbose):
     """
     Preprocess code chunks (deduplication, enhancement).
     """
-    click.echo(f"Preprocessing chunks from: {input}")
+    click.echo(f"Preprocessing chunks for project: {project}")
+    settings.initialize_project(project)
+    input_chunks = settings.get_chunks_path()
+    output = settings.get_preprocessed_chunks_path()
 
     try:
         # Load chunks
-        with Path(input).open(encoding="utf-8") as f:
+        with Path(input_chunks).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Preprocess
         preprocessor = ChunkPreprocessor()
@@ -470,37 +457,36 @@ def preprocess(input, output, verbose):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
-@click.option("--output", "-o", help="Output file for embedded chunks (JSON)")
-@click.option("--model-url", default="http://localhost:12434/engines/llama.cpp/v1", help="Embedding model URL")
-@click.option("--model-name", default="ai/embeddinggemma", help="Embedding model name")
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def embed(input, output, model_url, model_name, verbose):
+def embed(project, verbose):
     """
     Generate embeddings for code chunks.
     """
-    click.echo(f"Generating embeddings for chunks from: {input}")
-    click.echo(f"Model: {model_name} @ {model_url}")
+    click.echo(f"Generating embeddings for chunks for project : {project}")
+    settings.initialize_project(project)
+    processed_chunks = settings.get_preprocessed_chunks_path()
+    output = settings.get_embedded_chunks_path()
+
+    click.echo(f"Model: {settings.embedding_model_name} @ {settings.embedding_model_url}")
+    click.echo(f"Quality validation: {'enabled' if settings.quality_validation_enabled else 'disabled'}")
 
     try:
         # Load chunks
-        with Path(input).open(encoding="utf-8") as f:
+        with Path(processed_chunks).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
-        # Generate embeddings
-        config = EmbeddingConfig(model_url=model_url, model_name=model_name)
-        embedder = EmbeddingGenerator(config)
+        embedder = EmbeddingGenerator()
         embedded_chunks = embedder.generate_all(chunks)
 
         if verbose:
             click.echo(f"Embedded {len(embedded_chunks)} chunks")
             click.echo(f"Success: {embedder.stats['success']}, Failed: {embedder.stats['failed']}")
+            click.echo(
+                f"Quality checks passed: {embedder.stats['quality_checks_passed']}, Failed: {embedder.stats['quality_checks_failed']}"
+            )
 
         # Save results
         if output:
@@ -527,35 +513,54 @@ def embed(input, output, model_url, model_name, verbose):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input JSON file with embedded chunks")
-@click.option("--host", default="localhost", help="Qdrant host")
-@click.option("--port", default=6333, type=int, help="Qdrant port")
-@click.option("--collection-prefix", default="tipsy", help="Collection prefix")
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
+def validate_embeddings(project):
+    """
+    Validate embeddings for code chunks.
+    """
+    click.echo(f"Validating Generated embeddings for chunks for project : {project}")
+    settings.initialize_project(project)
+    embedding_chunks = settings.get_embedded_chunks_path()
+    output = settings.get_validation_report()
+
+    with Path(embedding_chunks).open(encoding="utf-8") as f:
+        data = json.load(f)
+    chunks = data.get("chunks", data)[:10]
+    for chunk in track(chunks, description="Validating embeddings..."):
+        validation_report = validate_embedding_chunk(chunk.get("embedding"), chunk)
+        # Store validation results in the chunk
+        chunk["embedding"] = []
+        chunk["quality_validation"] = validation_report
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    with Path(output).open("w", encoding="utf-8") as of:
+        json.dump(chunks, of, indent=2, ensure_ascii=False)
+
+
+@cli.command()
+@click.option("--project", "-p", required=True, help="Input JSON file with embedded chunks")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def index(input, host, port, collection_prefix, verbose):
+def index(project, verbose):
     """
     Index embedded chunks in Qdrant vector database.
     """
-    click.echo(f"Indexing chunks from: {input}")
-    click.echo(f"Qdrant: {host}:{port}, Prefix: {collection_prefix}")
+    settings.initialize_project(project)
+    embedding_chunks = settings.get_embedded_chunks_path()
+    output = settings.get_validation_report()
+    click.echo(f"Indexing chunks from: {embedding_chunks}")
+    click.echo(f"Qdrant: {settings.qdrant_host}:{settings.qdrant_port}, Prefix: {settings.project_name}")
 
     try:
         # Load chunks
-        with Path(input).open(encoding="utf-8") as f:
+        with Path(embedding_chunks).open(encoding="utf-8") as f:
             data = json.load(f)
 
-        # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         # Index in Qdrant
-        qdrant_config = QdrantConfig(host=host, port=port, collection_prefix=collection_prefix)
-        indexer = QdrantIndexer(qdrant_config)
+        indexer = QdrantIndexer()
 
         # Create collections (assuming 768-dim embeddings, adjust as needed)
-        indexer.create_collections(embedding_dim=768)
+        indexer.create_collections()
 
         # Index chunks
         indexer.index_chunks(chunks)
@@ -600,26 +605,24 @@ def hybrid_setup(collection_name, chunks_path):
 
 
 @cli.command()
-@click.option("--input", "-i", required=True, help="Input JSON file with chunks")
-@click.option("--output", "-o", required=True, help="Output enriched JSON file")
-@click.option("--symbol-index", "-s", help="Optional symbol index JSON file")
-@click.option("--model", "-m", default="ai/llama3.2:latest", help="LLM model to use")
-def enrich(input, output, symbol_index, model):
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
+def enrich(project):
     """
     Enrich code chunks with AI-generated context summaries.
     """
-    click.echo(f"Enriching chunks from {input} to {output}")
+    click.echo(f"Enriching chunks for project {project}")
+    settings.initialize_project(project)
+    processed_chunks = settings.get_preprocessed_chunks_path()
+    symbol_index = settings.get_symbol_index_path()
+    output = settings.get_enriched_chunks_path()
 
     try:
         # Load chunks
-        with Path(input).open(encoding="utf-8") as f:
+        with Path(processed_chunks).open(encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both direct chunk arrays and wrapped formats
-        if "chunks" in data:
-            chunks = data["chunks"]
-        else:
-            chunks = data  # Assume it's directly the chunks array
+        chunks = data.get("chunks", data)
 
         summarized_ids = set(get_summarized_chunks_ids())
         filtered_chunks = [item for item in chunks if item.get("id") not in summarized_ids]
@@ -630,10 +633,6 @@ def enrich(input, output, symbol_index, model):
         if symbol_index and Path(symbol_index).exists():
             with Path(symbol_index).open(encoding="utf-8") as f:
                 symbol_index_data = json.load(f)
-
-        # Set model if provided
-        if model:
-            os.environ["LLM_MODEL"] = model
 
         # Enrich
         enricher = ContextEnricher(chunks=filtered_chunks, symbol_index=symbol_index_data)
@@ -660,7 +659,7 @@ def enrich(input, output, symbol_index, model):
 
 @cli.command()
 @click.option(
-    "--input", "-i", required=True, help="Input .txt file or directory of .txt files with prompts (one per line)"
+    "--project", "-p", required=True, help="Input .txt file or directory of .txt files with prompts (one per line)"
 )
 @click.option("--output", "-o", help="Output file (jsonl/json/csv)")
 @click.option("--fmt", "-f", default="jsonl", type=click.Choice(["jsonl", "json", "csv"]), help="Output format")
@@ -673,7 +672,7 @@ def batch(input_path, output, fmt, delay, model):
     click.echo(f"🔄 Batch processing prompts from: {input_path}")
     if model:
         os.environ["LLM_MODEL"] = model
-    processor = BatchProcessor_2(delay=delay)
+    processor = BatchProcessor(delay=delay)
     prompts = processor.load_prompts(input_path)
     processor.process_prompts(prompts, output, fmt)
     click.echo("\n✅ Batch processing complete!")
@@ -702,9 +701,9 @@ def api(host, port, reload):
 @click.option("--llm-url", default="http://localhost:12434/", help="LLM API URL")
 @click.option("--llm-model", default="ai/llama3.2:latest", help="LLM model")
 @click.option("--embedding-model", default="ai/embeddinggemma", help="Embedding model")
-def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embedding_model):
+def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embedding_model):  # noqa: PLR0913, PLR0917
     """
-    Interactive RAG query CLI using CodeRAG_2
+    Interactive RAG query CLI using CodeRAG
     """
     from src.config import EmbeddingConfig
     from src.config import QdrantConfig
@@ -714,11 +713,11 @@ def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embeddi
     )
     qdrant_config = QdrantConfig(host=qdrant_host, port=qdrant_port, collection_prefix=collection_prefix)
 
-    rag_system = CodeRAG_2(
+    rag_system = CodeRAG(
         embedding_config=embedding_config, qdrant_config=qdrant_config, llm_api_url=llm_url, llm_model_name=llm_model
     )
 
-    console.print("[bold green]CodeRAG_2 Interactive CLI Ready![/bold green]")
+    console.print("[bold green]CodeRAG Interactive CLI Ready![/bold green]")
     while True:
         try:
             query = input("\n❓ Your question about the codebase: ").strip()

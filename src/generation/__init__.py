@@ -1,4 +1,4 @@
-from .batch_processor import BatchProcessor_2
+from .batch_processor import BatchProcessor
 from .context_builder import ContextEnricher
 from .context_builder import get_summarized_chunks_ids
 from .context_builder import stats_check

@@ -1,65 +1,112 @@
 """
-Consolidated embedding configuration
-Combines embedding-related settings from multiple sources
+Embedding configuration with connectivity check
 """
 
-from typing import Any
-
-from pydantic import ConfigDict
+import requests
 from pydantic import Field
-from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+from .settings import settings
+
+BAD_REQUEST = 400
 
 
 class EmbeddingConfig(BaseSettings):
     """
-    Consolidated configuration for embedding generation
-
-    This class combines settings from:
-    - src/embedding/embedder.py (EmbeddingConfig dataclass)
-    - old_code/code_rag.py (EmbeddingConfig usage)
-    - config/settings.py (embedding-related settings)
+    Configuration for embedding generation services
     """
 
-    # Model configuration
     model_url: str = Field(
-        default="http://localhost:12434/engines/llama.cpp/v1",
-        description="API endpoint for embedding model (Ollama/Docker)",
+        default_factory=lambda: settings.embedding_model_url, description="URL of the Embedding model"
     )
-    model_name: str = Field(default="ai/embeddinggemma", description="Name of the embedding model")
-
-    # Embedding configuration
-    embedding_dim: int = Field(default=768, description="Dimensionality of the embedding vectors")
-
-    # Processing configuration
-    batch_size: int = Field(default=32, description="Number of texts to process in each batch")
-    max_retries: int = Field(default=3, description="Maximum number of retry attempts for failed embeddings")
+    model_name: str = Field(
+        default_factory=lambda: settings.embedding_model_name, description="Name of Embedding model"
+    )
+    embedding_dim: int = Field(
+        default_factory=lambda: settings.embedding_dim, description="Dimension of the Embedding Model"
+    )
     timeout: int = Field(default=30, description="Timeout in seconds for embedding requests")
+    max_retries: int = Field(default=3, description="Number of retries for failed requests")
+    batch_size: int = Field(default=16, description="Size of Batch to process embedding at once")
 
-    # Additional settings from old_code implementation
-    embedding_model_name: str = Field(
-        default="ai/embeddinggemma",
-        alias="embedding_model_name",
-        description="Alternative name for embedding model (from config/settings.py)",
+    # Quality validation settings
+    quality_validation_enabled: bool = Field(
+        default_factory=lambda: settings.quality_validation_enabled,
+        description="Enable quality validation for embeddings",
+    )
+    quality_threshold_overall: float = Field(
+        default_factory=lambda: settings.quality_threshold_overall, description="Minimum overall quality score"
+    )
+    quality_threshold_dimensionality: float = Field(
+        default_factory=lambda: settings.quality_threshold_dimensionality, description="Minimum dimensionality score"
+    )
+    quality_threshold_semantic: float = Field(
+        default_factory=lambda: settings.quality_threshold_semantic, description="Minimum semantic score"
+    )
+    quality_threshold_distribution: float = Field(
+        default_factory=lambda: settings.quality_threshold_distribution, description="Minimum distribution score"
+    )
+    quality_threshold_domain: float = Field(
+        default_factory=lambda: settings.quality_threshold_domain, description="Minimum domain score"
+    )
+    quality_threshold_performance: float = Field(
+        default_factory=lambda: settings.quality_threshold_performance, description="Minimum performance score"
+    )
+    validator_weights_dimensionality: float = Field(
+        default_factory=lambda: settings.validator_weights_dimensionality,
+        description="Weight for dimensionality validator",
+    )
+    validator_weights_semantic: float = Field(
+        default_factory=lambda: settings.validator_weights_semantic, description="Weight for semantic validator"
+    )
+    validator_weights_distribution: float = Field(
+        default_factory=lambda: settings.validator_weights_distribution, description="Weight for distribution validator"
+    )
+    validator_weights_domain: float = Field(
+        default_factory=lambda: settings.validator_weights_domain, description="Weight for domain validator"
+    )
+    validator_weights_performance: float = Field(
+        default_factory=lambda: settings.validator_weights_performance, description="Weight for performance validator"
+    )
+    expected_embedding_dimension: int = Field(
+        default_factory=lambda: settings.expected_embedding_dimension, description="Expected dimension of embeddings"
+    )
+    validation_domain: str = Field(
+        default_factory=lambda: settings.validation_domain, description="Domain of content being validated"
+    )
+    latency_threshold_ms: int = Field(
+        default_factory=lambda: settings.latency_threshold_ms,
+        description="Maximum acceptable embedding generation time in milliseconds",
     )
 
-    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
+    def ping(self) -> bool:
+        """
+        Check if the embedding service is reachable by sending a test embedding request
+        """
+        try:
+            # Make a simple test request to the embedding service
+            test_url = f"{self.model_url}/embeddings"
+            test_payload = {"model": self.model_name, "input": "test"}
 
-    @model_validator(mode="before")
-    @classmethod
-    def handle_backward_compatibility(cls, values: Any) -> Any:
-        if isinstance(values, dict):
-            if "model_name" in values:
-                values.setdefault("embedding_model_name", values["model_name"])
-            elif "embedding_model_name" in values:
-                values.setdefault("model_name", values["embedding_model_name"])
-        return values
+            response = requests.post(test_url, json=test_payload, timeout=self.timeout)
 
-    @property
-    def effective_model_name(self) -> str:
-        """Get the effective model name, preferring model_name over embedding_model_name"""
-        return self.model_name or self.embedding_model_name
+            # Check if the response is successful
+            success = response.status_code in {200, 201, BAD_REQUEST}
 
-    def get_api_endpoint(self) -> str:
-        """Get the full API endpoint for embeddings"""
-        return f"{self.model_url}/embeddings"
+            # For more accurate check, we might want to validate specific error codes
+            if response.status_code == BAD_REQUEST:
+                # If it's a bad request, the service is reachable but there might be invalid parameters
+                # Check for the presence of error details in the response to distinguish from service not found
+                try:
+                    response.json()
+                except requests.exceptions.JSONDecodeError:
+                    # If we can't parse the JSON, it might be a real connectivity issue
+                    return False
+                else:
+                    # If we get a structured error response, the service is reachable
+                    return True
+            else:
+                return success
+
+        except requests.exceptions.RequestException:
+            return False

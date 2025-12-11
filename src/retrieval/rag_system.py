@@ -12,7 +12,7 @@ from src.retrieval.search import QdrantIndexer
 console = Console()
 
 
-class CodeRAG_2:
+class CodeRAG:
     def __init__(
         self,
         embedding_config: EmbeddingConfig,
@@ -44,7 +44,7 @@ class CodeRAG_2:
             try:
                 results = self.indexer.client.search(
                     collection_name=coll,
-                    query_vector=query_emb,
+                    query_vector=("semantic_dense", query_emb),
                     limit=3,  # top 3 per collection
                 )
                 all_results.extend(results)
@@ -64,8 +64,7 @@ class CodeRAG_2:
         console.print(f"[red]{prompt}[/red]")
 
         # 5. Query LLM
-        answer = self._ask_llm(prompt)
-        return answer
+        return self._ask_llm(prompt)
 
     def _build_rag_prompt(self, query: str, chunks: list[Any]) -> str:
         """Build prompt with retrieved code"""
@@ -107,6 +106,7 @@ Answer the question using ONLY the provided code snippets. If the answer isn't t
             response = requests.post(
                 f"{self.llm_url}/engines/llama.cpp/v1/completions",
                 json=payload,
+                timeout=60,
             )
             response.raise_for_status()
             data = response.json()
@@ -116,9 +116,10 @@ Answer the question using ONLY the provided code snippets. If the answer isn't t
                     return data["choices"][0]["text"].strip()
                 if "message" in data["choices"][0]:
                     return data["choices"][0]["message"]["content"].strip()
-            return "Error: Unexpected LLM response format."
         except Exception as e:
             return f"LLM Error: {e!s}"
+        else:
+            return "Error: Unexpected LLM response format."
 
 
 # ===== MAIN ===== (Preserved for standalone usage - all original functionality)
@@ -139,7 +140,7 @@ if __name__ == "__main__":
     )
     qdrant_config = QdrantConfig(host=QDRANT_HOST, port=QDRANT_PORT, collection_prefix=COLLECTION_PREFIX)
 
-    rag = CodeRAG_2(
+    rag = CodeRAG(
         embedding_config=embedding_config,
         qdrant_config=qdrant_config,
         llm_api_url=LLM_API_URL,
@@ -147,7 +148,7 @@ if __name__ == "__main__":
     )
 
     # Interactive loop - preserved exactly
-    console.print("[bold green]CodeRAG_2 Ready! Ask questions about your codebase.[/bold green]")
+    console.print("[bold green]CodeRAG Ready! Ask questions about your codebase.[/bold green]")
     while True:
         try:
             query = input("\\n❓ Your question: ").strip()

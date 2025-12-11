@@ -9,25 +9,58 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
 
+import numpy as np
 import requests
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress
 from rich.progress import SpinnerColumn
 from rich.progress import TimeElapsedColumn
-from tqdm import tqdm
 
 # Import consolidated configuration for backward compatibility
 from src.config import EmbeddingConfig
+from src.embedding.quality_validator import EmbeddingQualityValidator
 
 console = Console()
+
+# Constants for embedding validation
+MIN_EMBEDDING_MAGNITUDE = 0.1
+MAX_EMBEDDING_MAGNITUDE = 1000
+MIN_EMBEDDING_VARIANCE = 0.0001
+HTTP_SUCCESS = 200
 
 
 class EmbeddingGenerator:
     """Enhanced embedding generation with batch processing and quality validation"""
 
-    def __init__(self, config: EmbeddingConfig):
-        self.config = config
+    def __init__(self):
+        self.config = EmbeddingConfig()
+        # Initialize the EmbeddingQualityValidator with configuration from EmbeddingConfig
+        # Only initialize if quality validation is enabled
+        self.quality_validator = None
+        if self.config.quality_validation_enabled:
+            quality_config = {
+                "expected_dimension": self.config.expected_embedding_dimension,
+                "domain": self.config.validation_domain,
+                "latency_threshold_ms": self.config.latency_threshold_ms,
+                "quality_thresholds": {
+                    "overall_score": self.config.quality_threshold_overall,
+                    "dimensionality_score": self.config.quality_threshold_dimensionality,
+                    "semantic_score": self.config.quality_threshold_semantic,
+                    "distribution_score": self.config.quality_threshold_distribution,
+                    "domain_score": self.config.quality_threshold_domain,
+                    "performance_score": self.config.quality_threshold_performance,
+                },
+                "validator_weights": {
+                    "dimensionality": self.config.validator_weights_dimensionality,
+                    "semantic": self.config.validator_weights_semantic,
+                    "distribution": self.config.validator_weights_distribution,
+                    "domain": self.config.validator_weights_domain,
+                    "performance": self.config.validator_weights_performance,
+                },
+            }
+            self.quality_validator = EmbeddingQualityValidator(quality_config)
+
         self.stats = {
             "success": 0,
             "failed": 0,
@@ -38,9 +71,9 @@ class EmbeddingGenerator:
 
     def validate_embedding_quality(self, embedding: list[float]) -> tuple[bool, str]:
         """Validate embedding quality based on statistical properties"""
+        # Check for empty embedding and dimension mismatch
         if not embedding:
             return False, "Empty embedding"
-
         if len(embedding) != self.config.embedding_dim:
             return False, f"Wrong dimension: expected {self.config.embedding_dim}, got {len(embedding)}"
 
@@ -51,17 +84,15 @@ class EmbeddingGenerator:
 
         # Check embedding magnitude (should be reasonable)
         magnitude = sum(x * x for x in embedding) ** 0.5
-        if magnitude < 0.1:
-            return False, f"Embedding magnitude too low: {magnitude}"
-        if magnitude > 1000:
-            return False, f"Embedding magnitude too high: {magnitude}"
+        # Combine magnitude checks to reduce return statements
+        if magnitude < MIN_EMBEDDING_MAGNITUDE or magnitude > MAX_EMBEDDING_MAGNITUDE:
+            magnitude_msg = "too low" if magnitude < MIN_EMBEDDING_MAGNITUDE else "too high"
+            return False, f"Embedding magnitude {magnitude_msg}: {magnitude}"
 
         # Check if embedding is too uniform (low entropy/variance)
-        import numpy as np
-
         arr = np.array(embedding)
         variance = np.var(arr)
-        if variance < 0.0001:  # Very low variance indicates uniform values
+        if variance < MIN_EMBEDDING_VARIANCE:  # Very low variance indicates uniform values
             return False, f"Embedding variance too low: {variance}, suggesting uniform/uninformative values"
 
         return True, "Valid embedding"
@@ -70,17 +101,17 @@ class EmbeddingGenerator:
         """Generate embedding using Ollama API with enhanced error handling"""
         url = f"{self.config.model_url}/embeddings"
 
-        payload = {"model": self.config.model_name, "input": text}
+        payload = {"model": self.config.model_name, "input": text, "encoding_format": "float"}
 
         for attempt in range(self.config.max_retries):
             try:
                 response = requests.post(url, json=payload, timeout=self.config.timeout)
 
-                if response.status_code == 200:
+                if response.status_code == HTTP_SUCCESS:
                     result = response.json()
                     embedding = result.get("data")[0].get("embedding")
 
-                    # Validate embedding quality
+                    # First perform basic validation
                     is_valid, message = self.validate_embedding_quality(embedding)
                     if is_valid:
                         return embedding
@@ -122,9 +153,15 @@ class EmbeddingGenerator:
             embedding = self.generate_embedding_ollama(text)
 
             if embedding:
-                # Additional quality validation
-                is_valid, message = self.validate_embedding_quality(embedding)
-                if is_valid:
+                validation_report = self.quality_validator.validate_embedding(
+                    np.array(embedding, dtype=np.float32), chunk
+                )
+
+                # Store validation results in the chunk
+                chunk["quality_validation"] = validation_report
+
+                # Check if the embedding passed quality validation
+                if validation_report["passed"]:
                     chunk["embedding"] = embedding
                     chunk["embedding_model"] = self.config.model_name
                     chunk["embedding_timestamp"] = time.time()
@@ -132,12 +169,23 @@ class EmbeddingGenerator:
                     embedded_chunks.append(chunk)
                     self.stats["success"] += 1
                     self.stats["quality_checks_passed"] += 1
+
+                    # Log validation results if verbose
+                    console.print(
+                        f"[green]✓ Quality validation passed for: {chunk.get('qualified_name') or chunk.get('name')} (Score: {validation_report['overall_score']:.3f})[/green]"
+                    )
                 else:
+                    # Handle failed validation
                     self.stats["failed"] += 1
                     self.stats["quality_checks_failed"] += 1
                     console.print(
-                        f"[red]Quality validation failed for: {chunk['qualified_name'] or chunk['name']} - {message}[/red]"
+                        f"[red]Quality validation failed for: {chunk.get('qualified_name') or chunk.get('name')}[/red]"
                     )
+                    console.print(
+                        f"[red]  - Score: {validation_report['overall_score']:.3f} (Threshold: {self.config.quality_threshold_overall})[/red]"
+                    )
+                    console.print(f"[red]  - Reasons: {validation_report['rejection_reasons']}[/red]")
+                    console.print(f"[red]  - Recommendations: {validation_report['recommendations']}[/red]")
             else:
                 self.stats["failed"] += 1
                 console.print(f"[red]Failed to embed: {chunk['qualified_name'] or chunk['name']}[/red]")
@@ -146,7 +194,7 @@ class EmbeddingGenerator:
 
         return embedded_chunks
 
-    def generate_all(self, chunks: list[dict], parallel: bool = True) -> list[dict]:
+    def generate_all(self, chunks: list[dict], *, parallel: bool = True) -> list[dict]:
         """Generate embeddings for all chunks with enhanced reporting"""
         console.print(
             Panel.fit(
@@ -196,98 +244,5 @@ class EmbeddingGenerator:
             f"  [bold]Quality Checks:[/bold] Passed: {self.stats['quality_checks_passed']}, Failed: {self.stats['quality_checks_failed']}"
         )
         console.print(f"  [bold]Performance:[/bold] Avg: {avg_time:.3f}s per chunk, Total: {total_time:.1f}s")
-
-        return all_embedded
-
-
-# Preserve original EmbeddingGenerator with "_2" suffix for backward compatibility
-class EmbeddingGenerator_2:
-    """Original EmbeddingGenerator implementation (preserved for compatibility)"""
-
-    def __init__(self, config: EmbeddingConfig):
-        self.config = config
-        self.stats = {
-            "success": 0,
-            "failed": 0,
-            "total_time": 0,
-        }
-
-    def generate_embedding_ollama(self, text: str) -> list[float] | None:
-        """Generate embedding using Ollama API"""
-        url = f"{self.config.model_url}/embeddings"
-
-        payload = {"model": self.config.model_name, "input": text}
-
-        for attempt in range(self.config.max_retries):
-            try:
-                response = requests.post(url, json=payload, timeout=self.config.timeout)
-
-                if response.status_code == 200:
-                    result = response.json()
-                    return result.get("data")[0].get("embedding")
-                console.print(f"[yellow]Attempt {attempt + 1} failed: {response.status_code}[/yellow]")
-                with contextlib.suppress(Exception):
-                    console.print(f"[red]Error body: {response.text}[/red]")
-
-            except requests.exceptions.RequestException as e:
-                console.print(f"[yellow]Attempt {attempt + 1} failed: {e}[/yellow]")
-                time.sleep(2**attempt)  # Exponential backoff
-
-        return None
-
-    def generate_batch(self, chunks: list[dict]) -> list[dict]:
-        """Generate embeddings for a batch of chunks"""
-        embedded_chunks = []
-
-        for chunk in chunks:
-            start_time = time.time()
-
-            # Use enhanced text for embedding
-            text = chunk.get("embedding_text", chunk["code"])
-
-            embedding = self.generate_embedding_ollama(text)
-
-            if embedding:
-                chunk["embedding"] = embedding
-                chunk["embedding_model"] = self.config.model_name
-                chunk["embedding_timestamp"] = time.time()
-                embedded_chunks.append(chunk)
-                self.stats["success"] += 1
-            else:
-                self.stats["failed"] += 1
-                console.print(f"[red]Failed to embed: {chunk['qualified_name'] or chunk['name']}[/red]")
-
-            self.stats["total_time"] += time.time() - start_time
-
-        return embedded_chunks
-
-    def generate_all(self, chunks: list[dict], parallel: bool = True) -> list[dict]:
-        """Generate embeddings for all chunks"""
-        console.print(f"[cyan]Generating embeddings for {len(chunks)} chunks...[/cyan]")
-        console.print(f"Model: {self.config.model_name} @ {self.config.model_url}")
-
-        all_embedded = []
-
-        # Split into batches
-        batches = [chunks[i : i + self.config.batch_size] for i in range(0, len(chunks), self.config.batch_size)]
-
-        if parallel and len(batches) > 1:
-            # Parallel processing
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                futures = [executor.submit(self.generate_batch, batch) for batch in batches]
-
-                for future in tqdm(as_completed(futures), total=len(batches), desc="Embedding batches"):
-                    all_embedded.extend(future.result())
-        else:
-            # Sequential processing with progress bar
-            for batch in tqdm(batches, desc="Embedding batches"):
-                all_embedded.extend(self.generate_batch(batch))
-
-        # Stats
-        avg_time = self.stats["total_time"] / self.stats["success"] if self.stats["success"] > 0 else 0
-        console.print(f"[green]✓ Embedding complete![/green]")
-        console.print(f"  - Success: {self.stats['success']}")
-        console.print(f"  - Failed: {self.stats['failed']}")
-        console.print(f"  - Avg time: {avg_time:.3f}s per chunk")
 
         return all_embedded

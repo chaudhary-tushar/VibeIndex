@@ -32,6 +32,8 @@ dependencies = [
     "llama-index>=0.14.8",
     "sentencepiece>=0.2.1",
     "radon>=6.0.1",
+    "neo4j>=6.0.3",
+    "tinydb>=4.8.2",
 ]
 
 
@@ -136,6 +138,8 @@ ignore = [
   "PGH004",
   "S324",
   "PLC0415",
+  "BLE001",
+  "E501",
   "T201",
   "PLR6301",
   "COM812",

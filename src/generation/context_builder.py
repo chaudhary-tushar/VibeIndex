@@ -4,8 +4,9 @@ Context enrichment and building utilities
 
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
+
+from src.config import settings
 
 from .generator import LLMClient
 from .prompt_constructor import ContextPromptBuilder
@@ -13,17 +14,28 @@ from .prompt_constructor import MultiLanguageContextPrompt
 from .prompt_constructor import SymbolIndex
 
 
+def _validate_table_name(table_name: str) -> str:
+    """Validate table name to prevent SQL injection - only allow known safe values"""
+    valid_tables = {"enhanced_code_chunks"}
+    if table_name not in valid_tables:
+        error_msg = f"Invalid table name: {table_name}"
+        raise ValueError(error_msg)
+    return table_name
+
+
 def update_summary(record_id: str, summary: str):
     """Update summary for a chunk in the database"""
-    db_path = Path("enhanced_chunks.db")
-    table_name = "enhanced_code_chunks"
+    db_path = settings.get_project_db_path()
+    table_name = _validate_table_name("enhanced_code_chunks")
     try:
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
-        cur.execute(f"UPDATE {table_name} SET summary = ? WHERE id = ?", (summary, record_id))
+        # Use direct string concatenation since table name is validated
+        query = "UPDATE " + table_name + " SET summary = ? WHERE id = ?"  # noqa: S608
+        cur.execute(query, (summary, record_id))
         conn.commit()
         conn.close()
-    except Exception as e:
+    except sqlite3.Error as e:
         print(f"⚠️ Failed to update {record_id}: {e}")
 
 
@@ -66,7 +78,6 @@ class ContextEnricher:
     async def enrich(self, batch_size: int = 4) -> list[dict[str, Any]]:
         """Enrich chunks with AI-generated summaries in batches"""
         enriched = []
-        total_chunks = len(self.chunks)
 
         # Normalize chunks
         normalized_chunks = [self._normalize_chunk(chunk) for chunk in self.chunks]
@@ -128,14 +139,14 @@ class ContextEnricher:
 
 def get_summarized_chunks_ids() -> list[str]:
     """Get IDs of chunks that already have summaries"""
-    db_path = Path("enhanced_chunks.db")
-    table_name = "enhanced_code_chunks"
+    db_path = settings.get_project_db_path()
+    table_name = _validate_table_name("enhanced_code_chunks")
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
-    query = f"SELECT id FROM {table_name} WHERE summary IS NOT NULL AND summary != ''"
-
-    cur.execute(query)
+    # Use direct string concatenation since table name is validated
+    query = "SELECT id FROM " + table_name + " WHERE summary IS NOT NULL AND summary != ?"  # noqa: S608
+    cur.execute(query, ("",))
     results = [row[0] for row in cur.fetchall()]
 
     conn.close()
