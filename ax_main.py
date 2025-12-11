@@ -305,9 +305,9 @@ class TUIApp:
         self.console.print("Type 'quit' or 'exit' to go back to the main menu")
 
         # Implement query interface here (without execution)
-        # This is where CodeRAG_2 would be used
+        # This is where CodeRAG would be used
         """
-        rag_system = CodeRAG_2(...)
+        rag_system = CodeRAG(...)
         while True:
             query = input("Your question about the codebase: ")
             if not query or query.lower() in {"quit", "exit"}:

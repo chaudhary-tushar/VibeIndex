@@ -187,11 +187,11 @@ graph TD
     AK --> AL[HybridSearchEngine.create_hybrid_collection]
     AL --> AM[HybridSearchEngine.reindex_with_sparse_vectors]
 
-    AN[cli.rag] --> AO[CodeRAG_2.query_codebase]
+    AN[cli.rag] --> AO[CodeRAG.query_codebase]
     AO --> AP[EmbeddingGenerator.generate_embedding_ollama]
     AP --> AQ[QdrantIndexer.client.search]
-    AQ --> AR[CodeRAG_2._build_rag_prompt]
-    AR --> AS[CodeRAG_2._ask_llm]
+    AQ --> AR[CodeRAG._build_rag_prompt]
+    AR --> AS[CodeRAG._ask_llm]
 
     AT[cli.advanced_rag] --> AU[CompleteRetrievalSystem.retrieve]
     AU --> AV[HybridSearchEngine.hybrid_search]

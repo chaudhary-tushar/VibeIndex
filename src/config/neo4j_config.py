@@ -33,7 +33,7 @@ class Neo4jConfig(BaseSettings):
                 result = session.run("RETURN 1 AS test")
                 record = result.single()
                 return bool(record and record["test"] == 1)
-        except Exception:  # noqa: BLE001 - Neo4j driver can raise multiple exceptions
+        except Exception:
             return False
         finally:
             if driver:

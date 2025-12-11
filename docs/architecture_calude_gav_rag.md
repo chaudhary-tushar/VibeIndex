@@ -123,7 +123,7 @@ ingest → parse project
 preprocess → dedup & enrich
 embed → generate embeddings
 index → insert into Qdrant
-rag → query using CodeRAG_2 (vector-only)
+rag → query using CodeRAG (vector-only)
 advanced_rag → query with reranking
 FastAPI Server (main.py):
 

@@ -27,7 +27,7 @@ from src.generation.context_builder import stats_check
 from src.preprocessing import parse_file
 from src.preprocessing import parse_project
 from src.preprocessing.preprocessor import ChunkPreprocessor
-from src.retrieval import CodeRAG_2
+from src.retrieval import CodeRAG
 from src.retrieval.hybrid_search import setup_hybrid_collection
 from src.retrieval.search import QdrantIndexer
 from src.retrieval.search import index_from_embedded_json
@@ -703,7 +703,7 @@ def api(host, port, reload):
 @click.option("--embedding-model", default="ai/embeddinggemma", help="Embedding model")
 def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embedding_model):  # noqa: PLR0913, PLR0917
     """
-    Interactive RAG query CLI using CodeRAG_2
+    Interactive RAG query CLI using CodeRAG
     """
     from src.config import EmbeddingConfig
     from src.config import QdrantConfig
@@ -713,11 +713,11 @@ def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embeddi
     )
     qdrant_config = QdrantConfig(host=qdrant_host, port=qdrant_port, collection_prefix=collection_prefix)
 
-    rag_system = CodeRAG_2(
+    rag_system = CodeRAG(
         embedding_config=embedding_config, qdrant_config=qdrant_config, llm_api_url=llm_url, llm_model_name=llm_model
     )
 
-    console.print("[bold green]CodeRAG_2 Interactive CLI Ready![/bold green]")
+    console.print("[bold green]CodeRAG Interactive CLI Ready![/bold green]")
     while True:
         try:
             query = input("\n❓ Your question about the codebase: ").strip()
