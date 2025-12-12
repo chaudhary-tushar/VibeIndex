@@ -148,7 +148,8 @@ class ChunkPreprocessor:
             analysis TEXT,
             relationships TEXT,
             context TEXT,
-            summary TEXT
+            summary TEXT,
+            embedding TEXT
         )
         """)
 
@@ -185,12 +186,13 @@ class ChunkPreprocessor:
                 safe_json(chunk.get("analysis")),
                 safe_json(chunk.get("relationships")),
                 safe_json(chunk.get("context")),
-                None,
+                None,  # summary
+                None,  # embedding
             )
 
             cur.execute(
                 """
-                INSERT OR IGNORE INTO enhanced_code_chunks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                INSERT OR IGNORE INTO enhanced_code_chunks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
                 row,
             )

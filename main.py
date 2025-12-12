@@ -204,10 +204,10 @@ async def api_embed_chunks(request: dict):
         # Handle both direct chunk arrays and wrapped formats
         chunks = data.get("chunks", data)
 
-        # Generate embeddings
+        # Generate embeddings using resumable functionality
         config = EmbeddingConfig(model_url=model_url, model_name=model_name)
         embedder = EmbeddingGenerator(config)
-        embedded_chunks = embedder.generate_all(chunks)
+        embedded_chunks = embedder.generate_all_resumable(chunks)
 
         # Save with same structure as input
         output_data = {
@@ -479,7 +479,8 @@ def embed(project, verbose):
         chunks = data.get("chunks", data)
 
         embedder = EmbeddingGenerator()
-        embedded_chunks = embedder.generate_all(chunks)
+        # Use the resumable embedding functionality
+        embedded_chunks = embedder.generate_all_resumable(chunks)
 
         if verbose:
             click.echo(f"Embedded {len(embedded_chunks)} chunks")
@@ -576,14 +577,14 @@ def index(project, verbose):
 
 
 @cli.command()
-@click.option("--path", "-p", required=True, help="Path to pre-embedded JSON file")
-@click.option("--embedding-dim", "-d", default=768, type=int, help="Embedding dimension")
-@click.option("--collection-prefix", "-c", default="default", help="Collection prefix")
-def index_embedded(path, embedding_dim, collection_prefix):
-    console.print(f"[bold blue]Indexing pre-embedded JSON from:[/bold blue] {path}")
-    console.print(f"Embedding dim: {embedding_dim}, Prefix: {collection_prefix}")
+@click.option("--project", "-p", required=True, help="Path to pre-embedded JSON file")
+def index_embedded(project):
+    settings.initialize_project(project)
+    embed_chunks_path = settings.get_embedded_chunks_path()
+    console.print(f"[bold blue]Indexing pre-embedded JSON for:[/bold blue] {project}")
+    console.print(f"Embedding dim: {settings.embedding_dim}, Prefix: {settings.project_name}")
     try:
-        index_from_embedded_json(path, embedding_dim, collection_prefix)
+        index_from_embedded_json(embed_chunks_path)
         console.print("[bold green]✅ index_embedded complete![/bold green]")
     except Exception as e:
         console.print(f"[bold red]❌ Error: {e}[/bold red]")

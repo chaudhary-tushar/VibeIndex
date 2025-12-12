@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer  # pyright: ignore[reportMissingImports]
 
 app = FastAPI()
 
@@ -52,16 +52,17 @@ async def retrieve(query: Query):
         # Combine and rank results
         # For now, we'll use the vector results as the primary results
         # In a complete implementation, we would merge and re-rank both sets of results
-        combined_results = []
 
         # Add vector search results
-        for result in vector_results:
-            combined_results.append({
+        combined_results = [
+            {
                 "id": result.id,
                 "score": result.score,
                 "payload": result.payload,
                 "search_type": "vector",
-            })
+            }
+            for result in vector_results
+        ]
 
         # Add keyword search results that aren't already in the list
         for result in keyword_results:
@@ -80,7 +81,8 @@ async def retrieve(query: Query):
         # Limit to top 10 results
         final_results = combined_results[:10]
 
-        return {"results": final_results}
     except Exception as e:
         print(f"Error during retrieval: {e}")
         return {"results": []}
+    else:
+        return {"results": final_results}
