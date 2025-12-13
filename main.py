@@ -204,10 +204,10 @@ async def api_embed_chunks(request: dict):
         # Handle both direct chunk arrays and wrapped formats
         chunks = data.get("chunks", data)
 
-        # Generate embeddings
+        # Generate embeddings using resumable functionality
         config = EmbeddingConfig(model_url=model_url, model_name=model_name)
         embedder = EmbeddingGenerator(config)
-        embedded_chunks = embedder.generate_all(chunks)
+        embedded_chunks = embedder.generate_all_resumable(chunks)
 
         # Save with same structure as input
         output_data = {
@@ -479,7 +479,8 @@ def embed(project, verbose):
         chunks = data.get("chunks", data)
 
         embedder = EmbeddingGenerator()
-        embedded_chunks = embedder.generate_all(chunks)
+        # Use the resumable embedding functionality
+        embedded_chunks = embedder.generate_all_resumable(chunks)
 
         if verbose:
             click.echo(f"Embedded {len(embedded_chunks)} chunks")
@@ -576,14 +577,14 @@ def index(project, verbose):
 
 
 @cli.command()
-@click.option("--path", "-p", required=True, help="Path to pre-embedded JSON file")
-@click.option("--embedding-dim", "-d", default=768, type=int, help="Embedding dimension")
-@click.option("--collection-prefix", "-c", default="default", help="Collection prefix")
-def index_embedded(path, embedding_dim, collection_prefix):
-    console.print(f"[bold blue]Indexing pre-embedded JSON from:[/bold blue] {path}")
-    console.print(f"Embedding dim: {embedding_dim}, Prefix: {collection_prefix}")
+@click.option("--project", "-p", required=True, help="Path to pre-embedded JSON file")
+def index_embedded(project):
+    settings.initialize_project(project)
+    embed_chunks_path = settings.get_embedded_chunks_path()
+    console.print(f"[bold blue]Indexing pre-embedded JSON for:[/bold blue] {project}")
+    console.print(f"Embedding dim: {settings.embedding_dim}, Prefix: {settings.project_name}")
     try:
-        index_from_embedded_json(path, embedding_dim, collection_prefix)
+        index_from_embedded_json(embed_chunks_path)
         console.print("[bold green]✅ index_embedded complete![/bold green]")
     except Exception as e:
         console.print(f"[bold red]❌ Error: {e}[/bold red]")
@@ -591,9 +592,11 @@ def index_embedded(path, embedding_dim, collection_prefix):
 
 
 @cli.command()
-@click.option("--collection-name", "-n", required=True, help="Name of the hybrid collection")
-@click.option("--chunks-path", "-p", required=True, help="Path to chunks JSON file")
-def hybrid_setup(collection_name, chunks_path):
+@click.option("--project", "-p", required=True, help="Working Project")
+def hybrid_setup(project):
+    settings.initialize_project(project)
+    collection_name = settings.get_collection_name()
+    chunks_path = settings.get_preprocessed_chunks_path()  # requires embedded chunks.json
     console.print(f"[bold blue]Setting up hybrid collection:[/bold blue] {collection_name}")
     console.print(f"Using chunks: {chunks_path}")
     try:
@@ -664,14 +667,11 @@ def enrich(project):
 @click.option("--output", "-o", help="Output file (jsonl/json/csv)")
 @click.option("--fmt", "-f", default="jsonl", type=click.Choice(["jsonl", "json", "csv"]), help="Output format")
 @click.option("--delay", default=0.2, type=float, help="Delay (seconds) between requests")
-@click.option("--model", "-m", help="Override LLM model name")
 def batch(input_path, output, fmt, delay, model):
     """
     Batch process prompts through LLM.
     """
     click.echo(f"🔄 Batch processing prompts from: {input_path}")
-    if model:
-        os.environ["LLM_MODEL"] = model
     processor = BatchProcessor(delay=delay)
     prompts = processor.load_prompts(input_path)
     processor.process_prompts(prompts, output, fmt)
@@ -695,27 +695,14 @@ def api(host, port, reload):
 
 
 @cli.command()
-@click.option("--qdrant-host", default="localhost", help="Qdrant host")
-@click.option("--qdrant-port", default=6333, type=int, help="Qdrant port")
-@click.option("--collection-prefix", default="tipsy", help="Collection prefix")
-@click.option("--llm-url", default="http://localhost:12434/", help="LLM API URL")
-@click.option("--llm-model", default="ai/llama3.2:latest", help="LLM model")
-@click.option("--embedding-model", default="ai/embeddinggemma", help="Embedding model")
-def rag(qdrant_host, qdrant_port, collection_prefix, llm_url, llm_model, embedding_model):  # noqa: PLR0913, PLR0917
+@click.option("--project", "-p", required=True, help="Input JSON file with chunks")
+def rag(project):  # noqa: PLR0913, PLR0917
     """
     Interactive RAG query CLI using CodeRAG
     """
-    from src.config import EmbeddingConfig
-    from src.config import QdrantConfig
+    settings.initialize_project(project)
 
-    embedding_config = EmbeddingConfig(
-        model_url=f"{llm_url}engines/llama.cpp/v1", model_name=embedding_model, embedding_dim=768, batch_size=32
-    )
-    qdrant_config = QdrantConfig(host=qdrant_host, port=qdrant_port, collection_prefix=collection_prefix)
-
-    rag_system = CodeRAG(
-        embedding_config=embedding_config, qdrant_config=qdrant_config, llm_api_url=llm_url, llm_model_name=llm_model
-    )
+    rag_system = CodeRAG()
 
     console.print("[bold green]CodeRAG Interactive CLI Ready![/bold green]")
     while True:

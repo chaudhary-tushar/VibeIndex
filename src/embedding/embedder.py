@@ -20,6 +20,9 @@ from rich.progress import TimeElapsedColumn
 # Import consolidated configuration for backward compatibility
 from src.config import EmbeddingConfig
 from src.embedding.quality_validator import EmbeddingQualityValidator
+from src.embedding.resumable import add_embedding_column_to_db
+from src.embedding.resumable import get_embedded_chunks_ids
+from src.embedding.resumable import update_embedding
 
 console = Console()
 
@@ -68,6 +71,9 @@ class EmbeddingGenerator:
             "quality_checks_passed": 0,
             "quality_checks_failed": 0,
         }
+
+        # Create the embedding column in the database if it doesn't exist
+        add_embedding_column_to_db()
 
     def validate_embedding_quality(self, embedding: list[float]) -> tuple[bool, str]:
         """Validate embedding quality based on statistical properties"""
@@ -170,6 +176,9 @@ class EmbeddingGenerator:
                     self.stats["success"] += 1
                     self.stats["quality_checks_passed"] += 1
 
+                    # Update the database with the embedding
+                    update_embedding(chunk.get("id"), embedding)
+
                     # Log validation results if verbose
                     console.print(
                         f"[green]✓ Quality validation passed for: {chunk.get('qualified_name') or chunk.get('name')} (Score: {validation_report['overall_score']:.3f})[/green]"
@@ -246,3 +255,114 @@ class EmbeddingGenerator:
         console.print(f"  [bold]Performance:[/bold] Avg: {avg_time:.3f}s per chunk, Total: {total_time:.1f}s")
 
         return all_embedded
+
+    def generate_all_resumable(self, chunks: list[dict], *, parallel: bool = True) -> list[dict]:  # noqa: C901, PLR0912, PLR0915
+        """Generate embeddings for chunks with resumable functionality"""
+        console.print(
+            Panel.fit(
+                f"[bold cyan]Starting Resumable Enhanced Embedding Generation[/bold cyan]",
+                subtitle=f"Model: {self.config.model_name} | {len(chunks)} total chunks",
+                border_style="cyan",
+            )
+        )
+
+        # Get already embedded chunk IDs from database
+        embedded_ids = set(get_embedded_chunks_ids())
+        console.print(f"[yellow]Found {len(embedded_ids)} chunks already embedded in database[/yellow]")
+
+        # Filter out already embedded chunks
+        chunks_to_process = [chunk for chunk in chunks if chunk.get("id") not in embedded_ids]
+        console.print(f"[green]Chunks to process: {len(chunks_to_process)}[/green]")
+
+        if not chunks_to_process:
+            console.print("[green]All chunks are already embedded. Nothing to process.[/green]")
+            # Return all chunks with embeddings loaded from DB for those that have them
+            result_chunks = []
+            for chunk in chunks:
+                chunk_id = chunk.get("id")
+                if chunk_id in embedded_ids:
+                    # Load embedding from DB
+                    from src.embedding.resumable import get_embedding_from_db
+
+                    embedding = get_embedding_from_db(chunk_id)
+                    if embedding:
+                        chunk_copy = chunk.copy()
+                        chunk_copy["embedding"] = embedding
+                        result_chunks.append(chunk_copy)
+                    else:
+                        result_chunks.append(chunk)
+                else:
+                    result_chunks.append(chunk)
+            return result_chunks
+
+        all_embedded = []
+
+        # Split into batches
+        batches = [
+            chunks_to_process[i : i + self.config.batch_size]
+            for i in range(0, len(chunks_to_process), self.config.batch_size)
+        ]
+
+        with Progress(
+            SpinnerColumn(), *Progress.get_default_columns(), TimeElapsedColumn(), console=console
+        ) as progress:
+            if parallel and len(batches) > 1:
+                # Parallel processing
+                task = progress.add_task("Processing batches in parallel...", total=len(batches))
+
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    futures = [executor.submit(self.generate_batch, batch) for batch in batches]
+
+                    for future in as_completed(futures):
+                        batch_results = future.result()
+                        all_embedded.extend(batch_results)
+                        progress.advance(task)
+            else:
+                # Sequential processing with progress bar
+                task = progress.add_task("Processing batches sequentially...", total=len(batches))
+
+                for batch in batches:
+                    batch_results = self.generate_batch(batch)
+                    all_embedded.extend(batch_results)
+                    progress.advance(task)
+
+        # Combine already embedded chunks with newly embedded chunks
+        all_embedded_ids = {chunk.get("id") for chunk in all_embedded}
+        result_chunks = []
+
+        for chunk in chunks:
+            chunk_id = chunk.get("id")
+            if chunk_id in embedded_ids and chunk_id not in all_embedded_ids:
+                # Load embedding from DB
+                from src.embedding.resumable import get_embedding_from_db
+
+                embedding = get_embedding_from_db(chunk_id)
+                if embedding:
+                    chunk_copy = chunk.copy()
+                    chunk_copy["embedding"] = embedding
+                    result_chunks.append(chunk_copy)
+                else:
+                    result_chunks.append(chunk)
+            else:
+                # This chunk was just processed or wasn't in the initially embedded set
+                for embedded_chunk in all_embedded:
+                    if embedded_chunk.get("id") == chunk_id:
+                        result_chunks.append(embedded_chunk)
+                        break
+                else:
+                    result_chunks.append(chunk)
+
+        # Enhanced statistics
+        total_time = self.stats["total_time"]
+        avg_time = self.stats["total_time"] / self.stats["success"] if self.stats["success"] > 0 else 0
+        success_rate = (self.stats["success"] / len(chunks_to_process)) * 100 if chunks_to_process else 0
+
+        console.print(f"\n[green]✓ Resumable Embedding Generation Complete![/green]")
+        console.print(f"  [bold]Success:[/bold] {self.stats['success']}/{len(chunks_to_process)} ({success_rate:.1f}%)")
+        console.print(f"  [bold]Failed:[/bold] {self.stats['failed']}")
+        console.print(
+            f"  [bold]Quality Checks:[/bold] Passed: {self.stats['quality_checks_passed']}, Failed: {self.stats['quality_checks_failed']}"
+        )
+        console.print(f"  [bold]Performance:[/bold] Avg: {avg_time:.3f}s per chunk, Total: {total_time:.1f}s")
+
+        return result_chunks

@@ -855,14 +855,13 @@ class QdrantIndexer:
         return stats
 
 
-def index_from_embedded_json(
-    json_path: str, embedding_dim: int = 768, collection_prefix: str | None = None, batch_size: int | None = None
-) -> None:
+def index_from_embedded_json(json_path: str, batch_size: int | None = None) -> None:
     """
     Load pre-embedded chunks from JSON file and index them into Qdrant collections.
     Adapted from old_code/embedder.py logic.
     """
-
+    collection_prefix = settings.project_name
+    embedding_dim = settings.embedding_dim
     path = Path(json_path)
     if not path.exists():
         console.print(f"[red]File not found: {json_path}[/red]")

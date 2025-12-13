@@ -1,0 +1,33 @@
+1 - ingest works perfectly , need to check project manager, for if data dir deleted , it creates a new one wo giving error
+    - Minor changes to be made to get parent in python chunks with correct dependencies.
+    - Minor changes to be made to get html chunking working properly
+
+{
+  "parent": "apps/users/admin.py", to be checked
+  "dependencies": [ to be checked and remove name an django files
+    "django.contrib.gis.admin",
+    "apps.users.models.Profile"
+  ],
+  "references": [, to remove name
+    "Profile",
+    "admin.GISModelAdmin"
+  ],
+
+  "relationships": {
+    "imports": [ to add these not just name/alias
+      "django.contrib.gis.admin",
+      ".models.Profile"
+    ],
+    "class_inheritance": [ doesnt work
+      "admin.GISModelAdmin"
+    ],
+    "django_admin_registration": "Profile", #doesnt work
+    "dependencies": [ lists all dependencies
+      "Profile"
+    ],
+    "parent": "users.admin", #doesnt work,
+    "defined_symbols": [
+      "ProfileAdmin"
+    ]
+  },
+}

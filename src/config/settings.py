@@ -215,6 +215,12 @@ class Settings(BaseSettings):
             raise ProjectError
         return self.project_data_dir / "enhanced_chunks.db"
 
+    def get_collection_name(self) -> str:
+        """
+        Get name of collectino for hybrid Setup.
+        """
+        return f"Hybrid_{self.project_name}_setup"
+
     def save_project_config(self):
         """
         Save project-specific configuration to a file

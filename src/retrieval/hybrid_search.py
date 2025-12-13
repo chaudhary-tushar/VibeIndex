@@ -31,7 +31,6 @@ from rich.progress import TaskProgressColumn
 from rich.progress import TextColumn
 from rich.table import Table
 
-from src.config.embedding_config import EmbeddingConfig
 from src.embedding.embedder import EmbeddingGenerator
 
 console = Console()
@@ -569,7 +568,7 @@ def setup_hybrid_collection(collection_name: str, chunks_path: str):
     Function to setup hybrid collection for use in main.py CLI
     """
     client = QdrantClient()
-    embedding_gen = EmbeddingGenerator(EmbeddingConfig())
+    embedding_gen = EmbeddingGenerator()
 
     hybrid_engine = HybridSearchEngine(
         qdrant_client=client, embedding_generator=embedding_gen, config=HybridSearchConfig(final_top_k=10)
@@ -600,53 +599,6 @@ def setup_hybrid_collection(collection_name: str, chunks_path: str):
 
     # Reindex all chunks
     hybrid_engine.reindex_with_sparse_vectors(collection_name, chunks)
-
-    console.print(
-        Panel.fit(
-            "[bold green]✓ Hybrid Search Enabled![/bold green]\n"
-            "Your collection now supports both semantic and keyword search.",
-            border_style="green",
-        )
-    )
-
-
-def main():
-    client = QdrantClient(host="localhost", port=6333)
-    embedding_gen = EmbeddingGenerator(EmbeddingConfig())
-
-    hybrid_engine = HybridSearchEngine(
-        qdrant_client=client, embedding_generator=embedding_gen, config=HybridSearchConfig(final_top_k=10)
-    )
-
-    collection_name = input("\nEnter new collection name for hybrid search: ").strip()
-
-    # Load chunks
-    import json
-
-    chunks_file = "parsed_chunks_tipsy_2_embedded.json"
-    with pathlib.Path(chunks_file).open("r", encoding="utf-8") as f:
-        data = json.load(f)
-        chunks = data.get("chunks", [])
-
-    # Build BM25 vocab from raw texts
-    console.print("[cyan]Building BM25 vocabulary from chunks...[/cyan]")
-    all_texts = []
-    for chunk in chunks:
-        text_parts = [
-            chunk.get("code", ""),
-            chunk.get("docstring", ""),
-            chunk.get("qualified_name", ""),
-        ]
-        text = " ".join(filter(None, text_parts))
-        all_texts.append(text)
-    hybrid_engine.bm25_encoder.build_vocab_from_texts(all_texts)
-
-    # Create hybrid collection
-    hybrid_engine.create_hybrid_collection(collection_name, dense_dim=768)
-
-    # Reindex all chunks
-    hybrid_engine.reindex_with_sparse_vectors(collection_name, chunks)
-
     # Test
     test_query = input("\nEnter test query to compare search methods: ").strip()
     if test_query:
@@ -659,7 +611,3 @@ def main():
             border_style="green",
         )
     )
-
-
-if __name__ == "__main__":
-    main()

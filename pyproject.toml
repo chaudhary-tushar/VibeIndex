@@ -34,6 +34,8 @@ dependencies = [
     "radon>=6.0.1",
     "neo4j>=6.0.3",
     "tinydb>=4.8.2",
+    "textual>=6.8.0",
+    "pyperclip>=1.11.0",
 ]
 
 

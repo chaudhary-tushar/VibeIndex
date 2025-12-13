@@ -5,6 +5,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from src.config import EmbeddingConfig
+from src.config import LLMConfig
 from src.config import QdrantConfig
 from src.embedding.embedder import EmbeddingGenerator
 from src.retrieval.search import QdrantIndexer
@@ -13,19 +14,12 @@ console = Console()
 
 
 class CodeRAG:
-    def __init__(
-        self,
-        embedding_config: EmbeddingConfig,
-        qdrant_config: QdrantConfig,
-        llm_api_url: str,
-        llm_model_name: str,
-    ):
-        self.embedder = EmbeddingGenerator(embedding_config)
-        self.indexer = QdrantIndexer(qdrant_config)
-        self.llm_url = llm_api_url
-        self.llm_model = llm_model_name
+    def __init__(self):
+        self.embedder = EmbeddingGenerator()
+        self.indexer = QdrantIndexer()
+        self.llm = LLMConfig()
         # Ensure collections exist with correct dimensions
-        self.indexer.create_collections(embedding_config.embedding_dim)
+        self.indexer.create_collections()
 
     def _get_all_collections(self) -> list[str]:
         """Get list of all code collections"""
@@ -64,7 +58,8 @@ class CodeRAG:
         console.print(f"[red]{prompt}[/red]")
 
         # 5. Query LLM
-        return self._ask_llm(prompt)
+        # return self._ask_llm(prompt)  # noqa: ERA001
+        return prompt
 
     def _build_rag_prompt(self, query: str, chunks: list[Any]) -> str:
         """Build prompt with retrieved code"""
