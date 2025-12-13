@@ -385,7 +385,7 @@ class Analyzer:
             def visit_Import(self, node: cst.Import) -> None:  # noqa: N802
                 for alias in node.names:
                     # Handle "import module" or "import module as name"
-                    local_name = alias.asname.value if alias.asname else alias.name.value
+                    local_name = alias.asname.name.value if alias.asname else alias.name.value
                     if isinstance(alias.name, cst.Name):
                         module_name = alias.name.value
                     elif isinstance(alias.name, cst.Attribute):
@@ -403,29 +403,36 @@ class Analyzer:
                     module_name = node.module.value
                 elif isinstance(node.module, cst.Attribute):  # e.g., django.contrib.gis
                     module_name = code_for_node(node.module)
-                elif isinstance(node.module, cst.RelativeImport):  # relative imports like "from .models import X"
+                elif isinstance(node.module, cst.ImportFrom):  # relative imports like "from .models import X"
                     # For relative imports, we'll store the relative path
                     module_name = "." * len(node.module.dots) + (node.module.module.value if node.module.module else "")
                 else:
                     return
 
                 # Process each imported name
-                for alias in node.names:
-                    local_name = alias.asname.value if alias.asname else alias.name.value
-                    if isinstance(alias.name, cst.Name):
-                        # Handle "from module import name"
-                        self.from_imports[local_name] = (module_name, alias.name.value)
-                        # Check for Django-specific imports
-                        imported_name = alias.name.value
-                        if (
-                            module_name in {"django.db", "django.db.models", "django.core.models"}
-                            and imported_name == "models"
-                        ):
-                            self.django_model_imports[local_name] = f"{module_name}.{imported_name}"
-                    elif isinstance(alias.name, cst.Attribute):
-                        # Handle complex imports like "from module import attr.subattr"
-                        attr_name = code_for_node(alias.name)
-                        self.from_imports[local_name] = (module_name, attr_name)
+                # Check if node.names is an ImportStar (for "from module import *" statements)
+                if isinstance(node.names, cst.ImportStar):
+                    # For star imports, just record the module that's being imported from
+                    # We can't track individual names with star imports
+                    pass
+                else:
+                    # Process each alias in the import
+                    for alias in node.names:
+                        local_name = alias.asname.name.value if alias.asname else alias.name.value
+                        if isinstance(alias.name, cst.Name):
+                            # Handle "from module import name"
+                            self.from_imports[local_name] = (module_name, alias.name.value)
+                            # Check for Django-specific imports
+                            imported_name = alias.name.value
+                            if (
+                                module_name in {"django.db", "django.db.models", "django.core.models"}
+                                and imported_name == "models"
+                            ):
+                                self.django_model_imports[local_name] = f"{module_name}.{imported_name}"
+                        elif isinstance(alias.name, cst.Attribute):
+                            # Handle complex imports like "from module import attr.subattr"
+                            attr_name = code_for_node(alias.name)
+                            self.from_imports[local_name] = (module_name, attr_name)
 
         # Helper function to extract code for a node
         def code_for_node(node):
@@ -498,10 +505,7 @@ class Analyzer:
                 elif any(
                     base_class in self.django_model_imports
                     or any(django_import in base_class for django_import in self.django_model_imports)
-                    for base_class in [
-                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
-                        for base in node.bases or []
-                    ]
+                    for base_class in [code_for_node(base.value) for base in node.bases or []]
                 ):
                     # This is a Django model class
                     self.current_class = class_name
@@ -532,10 +536,7 @@ class Analyzer:
                     "admin" in base_class.lower()
                     or "Admin" in base_class
                     or base_class in {"admin.ModelAdmin", "admin.StackedInline", "admin.TabularInline"}
-                    for base_class in [
-                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
-                        for base in node.bases or []
-                    ]
+                    for base_class in [code_for_node(base.value) for base in node.bases or []]
                 ):
                     # This is a Django admin class
                     self.current_class = class_name
@@ -554,10 +555,7 @@ class Analyzer:
                 # Check if this is a Django form class
                 elif any(
                     "Form" in base_class or "form" in base_class.lower()
-                    for base_class in [
-                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
-                        for base in node.bases or []
-                    ]
+                    for base_class in [code_for_node(base.value) for base in node.bases or []]
                 ):
                     # This is a Django form class
                     self.current_class = class_name
@@ -571,10 +569,7 @@ class Analyzer:
                 # Check if this is a Django view class
                 elif any(
                     "View" in base_class or "view" in base_class.lower()
-                    for base_class in [
-                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
-                        for base in node.bases or []
-                    ]
+                    for base_class in [code_for_node(base.value) for base in node.bases or []]
                 ):
                     # This is a Django view class
                     self.current_class = class_name
@@ -587,11 +582,7 @@ class Analyzer:
 
                 # Handle other Django class types like managers
                 elif any(
-                    "Manager" in base_class
-                    for base_class in [
-                        code_for_node(base.value) if hasattr(base.value, "value") else base.value.value
-                        for base in node.bases or []
-                    ]
+                    "Manager" in base_class for base_class in [code_for_node(base.value) for base in node.bases or []]
                 ):
                     # This is a Django manager class
                     self.current_class = class_name
@@ -1028,8 +1019,27 @@ class Analyzer:
 
                 # Extract Django model fields if this is a model class
                 if class_type == "django_model":
+                    # if self.current_class in self.django_model_relationships:
+                    #     django_fields = [f for _, f in self.django_model_relationships[self.current_class]]
+                    #     if "django_model_fields" not in chunk.relationships:
+                    #         chunk.relationships["django_model_fields"] = []
+                    #     chunk.relationships["django_model_fields"].extend(django_fields)
+
                     if self.current_class in self.django_model_relationships:
-                        django_fields = [f for _, f in self.django_model_relationships[self.current_class]]
+                        # Handle both dict and tuple formats
+                        relationships_data = self.django_model_relationships[self.current_class]
+                        # print(relationships_data)
+                        django_fields = []
+                        for f in relationships_data:
+                            if isinstance(f, dict):
+                                django_fields.append(f.get("type"))
+                            elif isinstance(f, tuple):
+                                django_fields.append(f[1])
+                        # if relationships_data and isinstance(relationships_data[0], dict):
+                        #     django_fields = [f.get("type") for f in relationships_data]
+                        # else:
+                        #     django_fields = [f for _, f in relationships_data]
+
                         if "django_model_fields" not in chunk.relationships:
                             chunk.relationships["django_model_fields"] = []
                         chunk.relationships["django_model_fields"].extend(django_fields)
@@ -1269,7 +1279,6 @@ class Analyzer:
                 # Handle return annotation if present
                 return_annotation = ""
                 if node.returns:
-                    print("checking if node retuens")
                     try:
                         return_annotation = f" -> {module.code_for_node(node.returns)}"
                     except:

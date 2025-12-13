@@ -400,7 +400,10 @@ def ingest(path, verbose):
         click.echo("\n✅ Code parsing complete!")
 
     except Exception as e:
+        import traceback
+
         click.echo(f"❌ Error during parsing: {e}", err=True)
+        click.echo(traceback.format_exc(), err=True)
         return 1
 
 
